@@ -1,0 +1,21 @@
+class: "DStarLiteTest"
+
+# Classic D* demo: the freespace assumption leads Pacman into a cup.
+layoutName: "dstarCup"
+sensorRadius: "1"
+basePoints: "1"
+layout: """
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                            %
+%                            %
+%            %%%%%%%%%%      %
+%                     %      %
+%                     %      %
+%  .                  %   P  %
+%                     %      %
+%                     %      %
+%            %%%%%%%%%%      %
+%                            %
+%                            %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+"""

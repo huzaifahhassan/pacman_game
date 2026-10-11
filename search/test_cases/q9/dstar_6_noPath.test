@@ -1,0 +1,15 @@
+class: "DStarLiteTest"
+
+# The food is walled off: nextStep() must return None once Pacman knows this.
+layoutName: "dstarNoPath"
+sensorRadius: "1"
+basePoints: "1"
+expectNoPath: "True"
+layout: """
+%%%%%%%%%%%%
+%    %     %
+%  . %     %
+%    %   P %
+%    %     %
+%%%%%%%%%%%%
+"""

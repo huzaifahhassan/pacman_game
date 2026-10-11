@@ -1,0 +1,15 @@
+class: "DStarLiteTest"
+
+# Basic correctness on a tiny maze.
+layoutName: "tinyMaze"
+sensorRadius: "1"
+basePoints: "1"
+layout: """
+%%%%%%%
+%    P%
+% %%% %
+%  %  %
+%%   %%
+%. %%%%
+%%%%%%%
+"""

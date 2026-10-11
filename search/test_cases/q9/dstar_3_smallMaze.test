@@ -1,0 +1,18 @@
+class: "DStarLiteTest"
+
+# Many small replanning episodes; sensitive to how k_m is maintained.
+layoutName: "smallMaze"
+sensorRadius: "1"
+basePoints: "1"
+layout: """
+%%%%%%%%%%%%%%%%%%%%%%
+% %%        % %      %
+%    %%%%%% % %%%%%% %
+%%%%%%     P  %      %
+%    % %%%%%% %% %%%%%
+% %%%% %         %   %
+%        %%% %%%   % %
+%%%%%%%%%%    %%%%%% %
+%.         %%        %
+%%%%%%%%%%%%%%%%%%%%%%
+"""
