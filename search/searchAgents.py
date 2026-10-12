@@ -40,6 +40,7 @@ from game import Agent
 from game import Actions
 import util
 import time
+import itertools
 import search
 import pacman
 
@@ -296,14 +297,27 @@ class CornersProblem(search.SearchProblem):
         space)
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # A state is (position, unvisited_corners). The only things that matter
+        # for this problem are where Pacman is and which corners he still has to
+        # touch. Ghosts, food and the rest of the GameState are irrelevant.
+        # `unvisited_corners` is a tuple (so the whole state is hashable and
+        # immutable) that keeps the order of self.corners. The same set of
+        # corners therefore always gives the same tuple, so two equal states
+        # compare equal and the search can recognise them as the same state.
+        # If Pacman starts on a corner, that corner already counts as visited.
+        unvisited = tuple(c for c in self.corners if c != self.startingPosition)
+        return (self.startingPosition, unvisited)
 
     def isGoalState(self, state: Any):
         """
         Returns whether this search state is a goal state of the problem.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # Goal: all four corners have been touched, wherever Pacman is standing.
+        # (Being ON a corner is not enough: the state must remember the others.)
+        return len(state[1]) == 0
 
     def getSuccessors(self, state: Any):
         """
@@ -326,6 +340,19 @@ class CornersProblem(search.SearchProblem):
             #   hitsWall = self.walls[nextx][nexty]
 
             "*** YOUR CODE HERE ***"
+            position, unvisited = state
+            x, y = position
+            dx, dy = Actions.directionToVector(action)
+            nextx, nexty = int(x + dx), int(y + dy)
+            if self.walls[nextx][nexty]:
+                continue # that move runs into a wall, so it is not a legal action
+
+            next_position = (nextx, nexty)
+            # Stepping onto a corner removes it from the list still to visit.
+            # A new tuple is built every time, so states never share (and can
+            # never accidentally modify) one another's data.
+            next_unvisited = tuple(c for c in unvisited if c != next_position)
+            successors.append(((next_position, next_unvisited), action, 1))
 
         self._expanded += 1 # DO NOT CHANGE
         return successors
@@ -361,7 +388,36 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
     walls = problem.walls # These are the walls of the maze, as a Grid (game.py)
 
     "*** YOUR CODE HERE ***"
-    return 0 # Default to trivial solution
+
+    position, unvisited = state
+
+    # At a goal state no corner is left to visit, so nothing remains to pay for.
+    if len(unvisited) == 0:
+        return 0
+
+    # Relax the problem: pretend every wall has been removed. Then the cost of
+    # moving between two cells is just their Manhattan distance, and the cheapest
+    # way to finish is to visit the remaining corners in the best possible order.
+    # With at most four corners left there are at most 24 orders, so we simply
+    # try them all and keep the shortest tour.
+    #
+    # Why this is a good heuristic:
+    #   admissible - a real path has to visit the same corners but may also need
+    #                detours around walls, so it can only cost MORE than the tour.
+    #   consistent - this value is the exact optimal cost of the relaxed problem,
+    #                and one real step is also a legal step there, so the
+    #                estimate can drop by at most 1 (the cost of a step).
+    #   zero at goals, never negative, and non-trivial everywhere else.
+    best_tour = None
+    for order in itertools.permutations(unvisited):
+        tour = 0
+        here = position
+        for corner in order:
+            tour += util.manhattanDistance(here, corner)
+            here = corner
+        if best_tour is None or tour < best_tour:
+            best_tour = tour
+    return best_tour
 
 class AStarCornersAgent(SearchAgent):
     "A SearchAgent for FoodSearchProblem using A* and your foodHeuristic"

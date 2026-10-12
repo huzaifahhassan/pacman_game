@@ -1,0 +1,717 @@
+<title>UCS Test Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: a verdict banner on top, then a matrix of tiny mazes (one per test case), then a replay panel and a paint-your-own-test bench. */
+:root {
+  --font-display: "Silkscreen", "Courier New", monospace;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --bg: #edf0f8;
+  --surface: #ffffff;
+  --surface-2: #e5e9f4;
+  --ink: #10172b;
+  --ink-2: #444f6e;
+  --ink-3: #5d6788;
+  --line: #cdd4e6;
+  --accent: #2641d8;
+  --accent-ink: #ffffff;
+  --hl: rgba(38, 65, 216, .14);
+  --ok: #12733a;
+  --ok-soft: rgba(18, 115, 58, .12);
+  --bad: #b3261e;
+  --bad-soft: rgba(179, 38, 30, .12);
+  --warn: #8a5a00;
+  --warn-soft: rgba(184, 120, 0, .16);
+
+  /* the arcade board is its own screen: identical in both themes */
+  --b-board: #070b1c;
+  --b-wallfill: #0d1538;
+  --b-wall: #3a58ff;
+  --b-visited: rgba(255, 90, 110, .30);
+  --b-path: #ffb23e;
+  --b-ref: #2fd8cf;
+  --b-pac: #ffe14d;
+  --b-pellet: #ffd2c8;
+  --b-start: #9aa7d6;
+  --b-costtint: #a47bff;
+  --b-now: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5;
+    --line: #27345f; --accent: #8fa3ff; --accent-ink: #0a0f1f; --hl: rgba(143, 163, 255, .2);
+    --ok: #6fe39a; --ok-soft: rgba(111, 227, 154, .13); --bad: #ff8e9b; --bad-soft: rgba(255, 142, 155, .14);
+    --warn: #ffc766; --warn-soft: rgba(255, 199, 102, .16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5;
+  --line: #27345f; --accent: #8fa3ff; --accent-ink: #0a0f1f; --hl: rgba(143, 163, 255, .2);
+  --ok: #6fe39a; --ok-soft: rgba(111, 227, 154, .13); --bad: #ff8e9b; --bad-soft: rgba(255, 142, 155, .14);
+  --warn: #ffc766; --warn-soft: rgba(255, 199, 102, .16);
+  color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); line-height: 1.45; }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+button, input, select { font: inherit; color: inherit; }
+.tabnum { font-variant-numeric: tabular-nums; }
+
+.app { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 22px; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.3rem, 1rem + 1.3vw, 1.85rem); letter-spacing: .03em; text-wrap: balance; }
+h2 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 600; text-wrap: balance; }
+.sub, .lead { margin: 6px 0 0; max-width: 72ch; font-size: .92rem; color: var(--ink-2); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; min-width: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible, .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* verdict banner */
+.verdict { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+.verdict .big { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 1rem + 2vw, 2.4rem); line-height: 1; }
+.verdict .big small { display: block; margin-top: 6px; font-family: var(--font-ui); font-weight: 500; font-size: .8rem; letter-spacing: .02em; color: var(--ink-2); }
+.verdict.allok .big { color: var(--ok); }
+.verdict.somefail .big { color: var(--bad); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.chip { display: flex; flex-direction: column; gap: 1px; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.chip b { font-size: .82rem; font-weight: 600; }
+.chip span { font-size: .72rem; color: var(--ink-3); }
+.chip.ok { border-color: var(--ok); background: var(--ok-soft); }
+.chip.bad { border-color: var(--bad); background: var(--bad-soft); }
+.chip.warn { border-color: var(--warn); background: var(--warn-soft); }
+
+/* matrix of tiles */
+.matrixwrap { overflow-x: auto; padding-bottom: 6px; margin-top: 12px; }
+.matrix { display: grid; grid-template-columns: 8.6rem repeat(7, minmax(7.6rem, 1fr)); gap: 8px; min-width: 62rem; align-items: stretch; }
+.mh { font-size: .74rem; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); padding: 0 2px 2px; display: flex; flex-direction: column; justify-content: flex-end; }
+.mh small { font-weight: 400; color: var(--ink-3); letter-spacing: 0; font-size: .7rem; }
+.rowlabel { align-self: center; font: 600 .8rem var(--font-mono); color: var(--ink-2); }
+.rowlabel small { display: block; font: 400 .7rem var(--font-ui); color: var(--ink-3); }
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 6px 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; text-align: center; min-width: 0; }
+.tile:hover { background: var(--surface-2); }
+.tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--hl); }
+.tile canvas { display: block; border-radius: 4px; max-width: 100%; }
+.tile .cap { font-size: .7rem; color: var(--ink-2); line-height: 1.25; }
+.tile .mark { position: absolute; top: 5px; right: 6px; font-size: .78rem; font-weight: 700; color: var(--ok); }
+.tile.fail { border-color: var(--bad); background: var(--bad-soft); }
+.tile.fail .mark { color: var(--bad); }
+
+/* detail */
+.detail { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .detail { grid-template-columns: minmax(0, 1fr); } }
+.boardwrap { display: flex; justify-content: center; min-width: 0; overflow: hidden; }
+canvas.board { display: block; border-radius: 6px; background: var(--b-board); touch-action: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 12px 0 0; padding: 0; font-size: .75rem; color: var(--ink-2); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; flex: none; box-shadow: 0 0 0 3px var(--b-board); margin-inline: 3px; }
+.sw.trl { width: 16px; height: 4px; border-radius: 2px; background: var(--b-path); }
+.sw.ref { width: 16px; height: 0; border-top: 3px dashed var(--b-ref); }
+.sw.vis { width: 12px; height: 12px; border-radius: 2px; background: linear-gradient(var(--b-visited), var(--b-visited)), var(--b-board); box-shadow: none; }
+.sw.cst { width: 18px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, var(--b-board), var(--b-costtint)); box-shadow: none; }
+.sw.pel { width: 8px; height: 8px; border-radius: 50%; background: var(--b-pellet); }
+.sw.sta { width: 12px; height: 12px; border-radius: 50%; border: 2px dashed var(--b-start); box-sizing: border-box; }
+.status { display: flex; align-items: center; gap: 8px; font-weight: 600; margin: 8px 0 12px; }
+.status.ok { color: var(--ok); }
+.status.bad { color: var(--bad); }
+dl.stats { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0 0 14px; font-size: .86rem; }
+dl.stats dt { color: var(--ink-2); }
+dl.stats dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 12px; }
+.controls button, .bench button, .presets button { height: 34px; padding: 0 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .82rem; font-weight: 500; cursor: pointer; }
+.controls button:hover, .bench button:hover, .presets button:hover { background: var(--surface-2); }
+.controls button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 78px; }
+.controls input[type=range] { flex: 1 1 180px; min-width: 0; accent-color: var(--accent); }
+.controls label { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--ink-2); }
+.checks { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.checks li { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: 4px; font-size: .84rem; }
+.checks li .m { font-weight: 700; }
+.checks li.ok .m { color: var(--ok); }
+.checks li.bad .m { color: var(--bad); }
+.checks li small { display: block; color: var(--ink-3); font-size: .74rem; }
+canvas.chart { display: block; width: 100%; height: 120px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.cap2 { margin: 4px 0 0; font-size: .74rem; color: var(--ink-3); }
+
+/* bench */
+.bench { display: flex; flex-direction: column; gap: 12px; }
+.toolrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.toolrow .lbl { font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.brushes, .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.brushes button[aria-pressed="true"] { border-color: var(--accent); background: var(--hl); }
+.brushes button .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--b-costtint); }
+.results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 960px) { .results { grid-template-columns: minmax(0, 1fr); } }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; background: var(--surface); }
+.card h3 { margin: 0 0 4px; font-size: .92rem; }
+.card .note { margin: 8px 0 0; padding: 7px 10px; border-radius: 6px; background: var(--hl); font-size: .82rem; color: var(--ink-2); }
+select { height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+
+.foot { margin: 0; font-size: .75rem; color: var(--ink-3); max-width: 100ch; }
+#err { margin: 0; padding: 8px 12px; border-radius: 6px; background: #b3261e; color: #fff; font: 12px var(--font-mono); white-space: pre-wrap; }
+</style>
+
+<div class="app">
+  <header>
+    <h1>UCS Test Lab</h1>
+    <p class="sub" id="sub"></p>
+  </header>
+
+  <section class="panel verdict" id="verdict" aria-live="polite"></section>
+
+  <section>
+    <h2>Same code, different costs</h2>
+    <p class="lead">Each tile is one run of your <code>uniformCostSearch</code> on one maze with one step-cost model. Constant costs (the first two columns) and variable costs go through exactly the same function, and every run is judged against an independent Dijkstra. Click a tile to replay it.</p>
+    <div class="matrixwrap"><div class="matrix" id="matrix" role="group" aria-label="Test cases"></div></div>
+  </section>
+
+  <section class="panel" id="detailPanel">
+    <div class="detail">
+      <div>
+        <div class="boardwrap" id="dw"><canvas class="board" id="dcv" role="img" aria-label="Selected test case"></canvas></div>
+        <ul class="legend">
+          <li><span class="sw trl"></span>Path your UCS returned</li>
+          <li><span class="sw ref"></span>Dijkstra&rsquo;s optimal path</li>
+          <li><span class="sw vis"></span>Expanded so far</li>
+          <li id="legCost"><span class="sw cst"></span>Step cost (brighter = dearer)</li>
+          <li><span class="sw pel"></span>Goal</li>
+          <li><span class="sw sta"></span>Start</li>
+        </ul>
+      </div>
+      <div>
+        <h2 id="dTitle"></h2>
+        <div class="status" id="dStatus"></div>
+        <dl class="stats" id="dStats"></dl>
+        <div class="controls">
+          <button type="button" class="primary" id="dPlay">Replay</button>
+          <input type="range" id="dScrub" min="0" max="0" value="0" aria-label="Expansions shown">
+          <span class="tabnum mono" id="dScrubLbl"></span>
+        </div>
+        <div class="controls">
+          <label><input type="checkbox" id="optCost" checked> Show step costs</label>
+          <label><input type="checkbox" id="optRef" checked> Show Dijkstra&rsquo;s path</label>
+        </div>
+        <canvas class="chart" id="chart" role="img" aria-label="Cost of each expanded state in order"></canvas>
+        <p class="cap2" id="chartCap"></p>
+        <ul class="checks" id="dChecks"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel bench">
+    <div>
+      <h2>Paint your own test</h2>
+      <p class="lead">Set walls and step costs yourself and run the same algorithm twice on your maze: once with every step costing 1, once with your costs. UCS should be optimal both times. Paint by dragging on the grid. The bench runs a JavaScript copy of your <code>uniformCostSearch</code>; the banner above says whether that copy matched your Python on every recorded case.</p>
+    </div>
+    <div class="toolrow">
+      <span class="lbl">Maze</span>
+      <select id="baseSel" aria-label="Starting maze"></select>
+      <span class="lbl">Brush</span>
+      <div class="brushes" id="brushes" role="group" aria-label="Brush"></div>
+    </div>
+    <div class="toolrow">
+      <span class="lbl">Presets</span>
+      <div class="presets" id="presets" role="group" aria-label="Cost presets"></div>
+    </div>
+    <div class="boardwrap" id="pw"><canvas class="board" id="pcv" role="img" aria-label="Editable maze. Drag to paint."></canvas></div>
+    <div class="results">
+      <div class="card" id="cardA"></div>
+      <div class="card" id="cardB"></div>
+    </div>
+  </section>
+
+  <p class="foot" id="foot"></p>
+  <pre id="err" hidden></pre>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const LAB = /*__LAB__*/null;
+
+  const $ = (id) => document.getElementById(id);
+  const errBox = $('err');
+  window.addEventListener('error', (ev) => {
+    errBox.hidden = false;
+    errBox.textContent += (ev.message || 'Script error') + ' (line ' + ev.lineno + ')\n';
+  });
+
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fmtCost = (c) => {
+    if (typeof c !== 'number') return '–';
+    if (Number.isInteger(c)) return c >= 1e7 ? c.toExponential(2).replace('e+', 'e') : String(c);
+    return c >= 1e6 ? c.toExponential(2).replace('e+', 'e') : String(+c.toFixed(4));
+  };
+  const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+  const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b)) + 1e-12;
+
+  // the successor order PositionSearchProblem.getSuccessors uses: North, South, East, West
+  const DIRS = [{ l: 'N', dx: 0, dy: 1 }, { l: 'S', dx: 0, dy: -1 }, { l: 'E', dx: 1, dy: 0 }, { l: 'W', dx: -1, dy: 0 }];
+  const STEP = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] };
+
+  const CHECKS = [
+    { k: 'optimal', name: 'Optimal cost', why: 'The cost UCS found equals the true optimum from Dijkstra.' },
+    { k: 'legal', name: 'Legal path to the goal', why: 'The returned actions never hit a wall and end on the goal.' },
+    { k: 'cheapest_first', name: 'Cheapest entry popped first', why: 'The cost of each popped heap entry never goes down.' },
+    { k: 'expanded_once', name: 'Each state expanded once', why: 'No state is expanded twice (stale duplicates are skipped on pop).' },
+    { k: 'goal_on_pop', name: 'Goal tested on pop', why: 'The goal is returned when popped and never expanded.' },
+    { k: 'matches_bfs', name: 'Constant cost behaves like BFS', why: 'With constant costs UCS expands exactly as many states as your breadthFirstSearch.' }
+  ];
+
+  // ------------------------------------------------------------ grids
+  function gridFor(mk, key) {
+    const M = LAB.mazes[mk], C = key ? LAB.cases[mk][key] : null;
+    const W = M.w, H = M.h, wall = [], cost = [];
+    for (let x = 0; x < W; x++) { wall.push(new Array(H).fill(false)); cost.push(new Array(H).fill(null)); }
+    M.walls.forEach((row, r) => { const y = H - 1 - r; for (let x = 0; x < W; x++) wall[x][y] = row[x] === '#'; });
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (!wall[x][y]) cost[x][y] = 1;
+    if (C) C.cc.forEach((row, r) => { const y = H - 1 - r; for (let x = 0; x < W; x++) if (row[x] !== null) cost[x][y] = row[x]; });
+    return { W, H, wall, cost, start: M.start.slice(), goal: M.goal.slice() };
+  }
+  function copyGrid(g, constant) {
+    const cost = g.cost.map((col, x) => col.map((v, y) => (v === null ? null : (constant === undefined ? v : constant))));
+    return { W: g.W, H: g.H, wall: g.wall.map((c) => c.slice()), cost, start: g.start.slice(), goal: g.goal.slice() };
+  }
+  function costRange(g) {                       // log10 range of the step costs, for the tint
+    let lo = Infinity, hi = -Infinity;
+    for (let x = 0; x < g.W; x++) for (let y = 0; y < g.H; y++) {
+      const v = g.cost[x][y];
+      if (v === null || v <= 0) continue;
+      const l = Math.log10(v);
+      if (l < lo) lo = l;
+      if (l > hi) hi = l;
+    }
+    return { lo, hi };
+  }
+
+  // ------------------------------------------------------------ a JavaScript copy of the student's uniformCostSearch
+  const less = (a, b) => a.pri < b.pri || (a.pri === b.pri && a.seq < b.seq);     // util.PriorityQueue: (priority, insertion count)
+  class MinHeap {
+    constructor() { this.a = []; this.n = 0; }
+    isEmpty() { return this.a.length === 0; }
+    push(item, pri) {
+      const a = this.a; a.push({ item, pri, seq: this.n++ });
+      let i = a.length - 1;
+      while (i > 0) { const p = (i - 1) >> 1; if (less(a[i], a[p])) { const t = a[i]; a[i] = a[p]; a[p] = t; i = p; } else break; }
+    }
+    pop() {
+      const a = this.a, top = a[0], last = a.pop();
+      if (a.length) {
+        a[0] = last; let i = 0;
+        for (;;) {
+          const l = 2 * i + 1, r = l + 1; let m = i;
+          if (l < a.length && less(a[l], a[m])) m = l;
+          if (r < a.length && less(a[r], a[m])) m = r;
+          if (m === i) break;
+          const t = a[i]; a[i] = a[m]; a[m] = t; i = m;
+        }
+      }
+      return top.item;
+    }
+  }
+
+  function ucsPort(g) {
+    const W = g.W, heap = new MinHeap();
+    heap.push({ x: g.start[0], y: g.start[1], path: '', cost: 0 }, 0);
+    const visited = new Uint8Array(W * g.H), order = [], ecost = [];
+    let popsSeen = 0, dups = 0, lastPop = -Infinity, monotone = true, goalExpanded = false;
+    while (!heap.isEmpty()) {
+      const it = heap.pop(); popsSeen++;
+      if (it.cost < lastPop) monotone = false;
+      lastPop = it.cost;
+      const id = it.x + it.y * W;
+      if (visited[id]) { dups++; continue; }
+      if (it.x === g.goal[0] && it.y === g.goal[1]) return { found: true, path: it.path, cost: it.cost, order, ecost, dups, monotone, goalExpanded };
+      visited[id] = 1; order.push(id); ecost.push(it.cost);
+      for (const d of DIRS) {
+        const nx = it.x + d.dx, ny = it.y + d.dy;
+        if (g.wall[nx][ny] || visited[nx + ny * W]) continue;
+        const nc = it.cost + g.cost[nx][ny];
+        heap.push({ x: nx, y: ny, path: it.path + d.l, cost: nc }, nc);
+      }
+    }
+    return { found: false, path: '', cost: null, order, ecost, dups, monotone, goalExpanded };
+  }
+
+  // an independent Dijkstra, scanning neighbours in a different order (W, E, S, N) than the algorithm under test
+  function dijkstra(g) {
+    const W = g.W, best = new Float64Array(W * g.H).fill(Infinity), parent = new Int32Array(W * g.H).fill(-1);
+    const heap = new MinHeap(), sid = g.start[0] + g.start[1] * W, gid = g.goal[0] + g.goal[1] * W;
+    best[sid] = 0; heap.push(sid, 0);
+    while (!heap.isEmpty()) {
+      const id = heap.pop(), x = id % W, y = (id - x) / W;
+      if (id === gid) break;
+      const c = best[id];
+      for (const d of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nx = x + d[0], ny = y + d[1];
+        if (g.wall[nx][ny]) continue;
+        const nid = nx + ny * W, nc = c + g.cost[nx][ny];
+        if (nc < best[nid]) { best[nid] = nc; parent[nid] = id; heap.push(nid, nc); }
+      }
+    }
+    if (best[gid] === Infinity) return { cost: Infinity, path: '' };
+    const out = []; let id = gid;
+    while (id !== sid) {
+      const p = parent[id], dx = (id % W) - (p % W), dy = Math.floor(id / W) - Math.floor(p / W);
+      out.push(dx === 1 ? 'E' : dx === -1 ? 'W' : dy === 1 ? 'N' : 'S'); id = p;
+    }
+    return { cost: best[gid], path: out.reverse().join('') };
+  }
+
+  function fewestMoves(g) {                      // plain BFS: the path with the fewest moves, ignoring costs
+    const W = g.W, prev = new Int32Array(W * g.H).fill(-2), q = [g.start[0] + g.start[1] * W], gid = g.goal[0] + g.goal[1] * W;
+    prev[q[0]] = -1;
+    for (let h = 0; h < q.length; h++) {
+      const id = q[h]; if (id === gid) break;
+      const x = id % W, y = (id - x) / W;
+      for (const d of DIRS) {
+        const nx = x + d.dx, ny = y + d.dy;
+        if (g.wall[nx][ny] || prev[nx + ny * W] !== -2) continue;
+        prev[nx + ny * W] = id; q.push(nx + ny * W);
+      }
+    }
+    if (prev[gid] === -2) return '';
+    const out = []; let id = gid;
+    while (prev[id] !== -1) {
+      const p = prev[id], dx = (id % W) - (p % W), dy = Math.floor(id / W) - Math.floor(p / W);
+      out.push(dx === 1 ? 'E' : dx === -1 ? 'W' : dy === 1 ? 'N' : 'S'); id = p;
+    }
+    return out.reverse().join('');
+  }
+
+  function pathCost(g, path) {
+    let x = g.start[0], y = g.start[1], c = 0;
+    for (const a of path) { x += STEP[a][0]; y += STEP[a][1]; if (g.wall[x][y]) return null; c += g.cost[x][y]; }
+    return c;
+  }
+
+  // ------------------------------------------------------------ drawing
+  function drawBoard(cv, g, o) {
+    const cs = o.cs, W = g.W, H = g.H, dpr = window.devicePixelRatio || 1;
+    cv.style.width = W * cs + 'px'; cv.style.height = H * cs + 'px';
+    cv.width = Math.round(W * cs * dpr); cv.height = Math.round(H * cs * dpr);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n).trim();
+    const X = (x) => x * cs, Y = (y) => (H - 1 - y) * cs, cx = (x) => X(x) + cs / 2, cy = (y) => Y(y) + cs / 2;
+    ctx.fillStyle = col('--b-board'); ctx.fillRect(0, 0, W * cs, H * cs);
+
+    if (o.cost) {                                 // step-cost landscape
+      const r = o.range || costRange(g);
+      if (r.hi > r.lo) {
+        ctx.fillStyle = col('--b-costtint');
+        for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+          const v = g.cost[x][y]; if (v === null || v <= 0) continue;
+          ctx.globalAlpha = 0.03 + 0.34 * (Math.log10(v) - r.lo) / (r.hi - r.lo);
+          ctx.fillRect(X(x), Y(y), cs, cs);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    if (o.order) {                                // expanded cells
+      ctx.fillStyle = col('--b-visited');
+      const n = Math.min(o.upto === undefined ? o.order.length : o.upto, o.order.length);
+      for (let i = 0; i < n; i++) { const id = o.order[i], x = id % W, y = (id - x) / W; ctx.fillRect(X(x) + (cs > 5 ? 1 : 0), Y(y) + (cs > 5 ? 1 : 0), cs - (cs > 5 ? 2 : 0), cs - (cs > 5 ? 2 : 0)); }
+    }
+    // walls
+    const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !g.wall[x][y];
+    ctx.fillStyle = col('--b-wallfill'); ctx.strokeStyle = col('--b-wall'); ctx.lineWidth = Math.max(1, cs * 0.1); ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+      if (!g.wall[x][y]) continue;
+      ctx.fillRect(X(x), Y(y), cs, cs);
+      if (open(x, y + 1)) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x) + cs, Y(y)); }
+      if (open(x, y - 1)) { ctx.moveTo(X(x), Y(y) + cs); ctx.lineTo(X(x) + cs, Y(y) + cs); }
+      if (open(x - 1, y)) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x), Y(y) + cs); }
+      if (open(x + 1, y)) { ctx.moveTo(X(x) + cs, Y(y)); ctx.lineTo(X(x) + cs, Y(y) + cs); }
+    }
+    ctx.stroke();
+
+    const line = (path) => {
+      let x = g.start[0], y = g.start[1];
+      ctx.beginPath(); ctx.moveTo(cx(x), cy(y));
+      for (const a of path) { x += STEP[a][0]; y += STEP[a][1]; ctx.lineTo(cx(x), cy(y)); }
+      ctx.stroke();
+    };
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (o.ref) { ctx.strokeStyle = col('--b-ref'); ctx.lineWidth = Math.max(1.5, cs * 0.13); ctx.setLineDash([cs * 0.4, cs * 0.3]); line(o.ref); ctx.setLineDash([]); }
+    if (o.path) { ctx.strokeStyle = col('--b-path'); ctx.lineWidth = Math.max(1.5, cs * 0.17); line(o.path); }
+
+    ctx.fillStyle = col('--b-pellet');
+    ctx.beginPath(); ctx.arc(cx(g.goal[0]), cy(g.goal[1]), Math.max(1.8, cs * 0.2), 0, Math.PI * 2); ctx.fill();
+    if (o.now !== undefined && o.now >= 0) {
+      const id = o.now, x = id % W, y = (id - x) / W;
+      ctx.strokeStyle = col('--b-now'); ctx.lineWidth = Math.max(1.5, cs * 0.12);
+      ctx.strokeRect(X(x) + 1, Y(y) + 1, cs - 2, cs - 2);
+    }
+    // Pacman on the start cell
+    ctx.fillStyle = col('--b-pac');
+    ctx.beginPath(); ctx.moveTo(cx(g.start[0]), cy(g.start[1]));
+    ctx.arc(cx(g.start[0]), cy(g.start[1]), cs * 0.42, 0.62, Math.PI * 2 - 0.62); ctx.closePath(); ctx.fill();
+  }
+
+  function drawChart(cv, ecost, upto) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = 120;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n).trim();
+    ctx.clearRect(0, 0, w, h);
+    if (!ecost.length) return false;
+    const pos = ecost.filter((v) => v > 0), mn = pos.length ? Math.min.apply(null, pos) : 1, mx = Math.max.apply(null, ecost);
+    const useLog = pos.length > 0 && mx / mn > 1e3;
+    const f = (v) => (useLog ? Math.log10(Math.max(v, mn)) : v), lo = f(useLog ? mn : 0), hi = f(mx);
+    const padL = 8, padR = 8, padT = 10, padB = 12, N = ecost.length;
+    const px = (i) => padL + (N <= 1 ? 0 : (i / (N - 1)) * (w - padL - padR));
+    const py = (v) => padT + (1 - (hi > lo ? (f(v) - lo) / (hi - lo) : 0.5)) * (h - padT - padB);
+    ctx.strokeStyle = col('--line'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, h - padB); ctx.lineTo(w - padR, h - padB); ctx.stroke();
+    ctx.strokeStyle = col('--accent'); ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ecost.forEach((v, i) => (i ? ctx.lineTo(px(i), py(v)) : ctx.moveTo(px(i), py(v)))); ctx.stroke();
+    const k = Math.max(0, Math.min(N - 1, upto - 1));
+    if (upto > 0) { ctx.fillStyle = col('--accent'); ctx.beginPath(); ctx.arc(px(k), py(ecost[k]), 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = col('--ink-3'); ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+    ctx.fillText(fmtCost(mx), padL + 2, padT + 2);
+    return useLog;
+  }
+
+  // ------------------------------------------------------------ verdict banner and matrix
+  const S = { maze: 'mediumMaze', key: 'west', upto: 0, playing: false, timer: 0, showCost: true, showRef: true };
+  let portOk = 0, portTotal = 0;
+  const gridCache = {};
+  const caseGrid = (mk, key) => gridCache[mk + '/' + key] || (gridCache[mk + '/' + key] = gridFor(mk, key));
+
+  function caseOk(C) { return Object.keys(C.checks).every((k) => C.checks[k]); }
+
+  function checkPort() {
+    portOk = 0; portTotal = 0;
+    Object.keys(LAB.cases).forEach((mk) => Object.keys(LAB.cases[mk]).forEach((key) => {
+      const C = LAB.cases[mk][key], r = ucsPort(caseGrid(mk, key));
+      portTotal++;
+      const same = r.found && r.path === C.path && close(r.cost, C.cost) && r.order.length === C.order.length && r.order.every((v, i) => v === C.order[i]);
+      if (same) portOk++;
+    }));
+  }
+
+  function renderVerdict() {
+    let cases = 0, pass = 0;
+    Object.keys(LAB.cases).forEach((mk) => Object.keys(LAB.cases[mk]).forEach((k) => { cases++; if (caseOk(LAB.cases[mk][k])) pass++; }));
+    const el = $('verdict');
+    el.className = 'panel verdict ' + (pass === cases ? 'allok' : 'somefail');
+    const chips = CHECKS.map((c) => {
+      const t = LAB.tally[c.k]; if (!t) return '';
+      return '<li class="chip ' + (t[0] === t[1] ? 'ok' : 'bad') + '" title="' + esc(c.why) + '"><b>' + (t[0] === t[1] ? '✓ ' : '✗ ') + esc(c.name) + '</b><span class="tabnum">' + t[0] + ' of ' + t[1] + ' cases</span></li>';
+    }).join('');
+    const port = '<li class="chip ' + (portOk === portTotal ? 'ok' : 'warn') + '" title="The paint bench runs a JavaScript copy of your algorithm. This checks it expands the same states in the same order as your Python, case by case."><b>' +
+      (portOk === portTotal ? '✓ ' : '! ') + 'Paint bench copy</b><span class="tabnum">identical to your Python in ' + portOk + ' of ' + portTotal + ' cases</span></li>';
+    el.innerHTML = '<div class="big tabnum">' + pass + ' / ' + cases + '<small>test cases pass</small></div><ul class="chips">' + chips + port + '</ul>';
+  }
+
+  function buildMatrix() {
+    const m = $('matrix');
+    let h = '<div></div>' + LAB.models.map((x) => '<div class="mh">' + esc(x.label) + '<small>' + esc(x.note) + '</small></div>').join('');
+    Object.keys(LAB.mazes).forEach((mk) => {
+      const M = LAB.mazes[mk];
+      h += '<div class="rowlabel">' + esc(mk) + '<small>' + M.w + '×' + M.h + ' cells</small></div>';
+      LAB.models.forEach((x) => {
+        const C = LAB.cases[mk][x.key], ok = caseOk(C);
+        h += '<button type="button" class="tile' + (ok ? '' : ' fail') + '" data-m="' + esc(mk) + '" data-k="' + x.key + '" aria-pressed="false" aria-label="' + esc(mk + ', ' + x.label + ': ' + (ok ? 'all checks pass' : 'a check fails')) + '">' +
+          '<span class="mark">' + (ok ? '✓' : '✗') + '</span><canvas></canvas><span class="cap">cost ' + esc(fmtCost(C.cost)) + '<br>' + C.exp + ' expanded</span></button>';
+      });
+    });
+    m.innerHTML = h;
+    m.querySelectorAll('.tile').forEach((t) => {
+      const mk = t.dataset.m, key = t.dataset.k, g = caseGrid(mk, key), C = LAB.cases[mk][key];
+      drawBoard(t.querySelector('canvas'), g, { cs: Math.max(2, Math.floor(128 / g.W)), cost: true, order: C.order, path: C.path });
+    });
+    m.addEventListener('click', (ev) => { const t = ev.target.closest('.tile'); if (t) select(t.dataset.m, t.dataset.k); });
+  }
+
+  // ------------------------------------------------------------ detail panel
+  function halt() { S.playing = false; clearTimeout(S.timer); }
+
+  function select(mk, key) {
+    halt();
+    S.maze = mk; S.key = key;
+    const C = LAB.cases[mk][key];
+    S.upto = C.order.length;
+    $('dScrub').max = C.order.length;
+    document.querySelectorAll('#matrix .tile').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.m === mk && t.dataset.k === key)));
+    renderDetail();
+  }
+
+  function renderDetail() {
+    const mk = S.maze, key = S.key, C = LAB.cases[mk][key], g = caseGrid(mk, key), mod = LAB.models.find((x) => x.key === key);
+    const ok = caseOk(C), n = C.order.length;
+    $('dTitle').textContent = mk + ' · ' + mod.label + ' (' + mod.note + ')';
+    $('dStatus').className = 'status ' + (ok ? 'ok' : 'bad');
+    $('dStatus').textContent = ok ? '✓ Optimal, legal and well-behaved' : '✗ A check failed';
+    const full = S.upto >= n;
+    $('dStats').innerHTML =
+      '<dt>Cost UCS found</dt><dd>' + esc(fmtCost(C.cost)) + '</dd>' +
+      '<dt>True optimum</dt><dd>' + esc(fmtCost(C.opt)) + '</dd>' +
+      '<dt>Moves in the path</dt><dd>' + C.path.length + '</dd>' +
+      '<dt>States expanded</dt><dd>' + n + '</dd>' +
+      '<dt>Stale heap entries skipped</dt><dd>' + C.dups + '</dd>' +
+      (C.bfs !== null ? '<dt>Your BFS expanded</dt><dd>' + C.bfs + (C.bfs === n ? ' (same)' : ' (different)') + '</dd>' : '');
+    $('dScrubLbl').textContent = S.upto + ' / ' + n + (S.upto > 0 ? ' · cost ' + fmtCost(C.ecost[S.upto - 1]) : '');
+    $('dScrub').value = S.upto;
+    $('dPlay').textContent = S.playing ? 'Pause' : (full ? 'Replay' : 'Play');
+    const r = costRange(g);
+    $('legCost').hidden = !(S.showCost && r.hi > r.lo);
+    const cs = Math.max(4, Math.min(24, Math.floor(Math.min($('dw').clientWidth || 560, 640) / g.W), Math.floor(380 / g.H)));
+    drawBoard($('dcv'), g, { cs, cost: S.showCost, range: r, order: C.order, upto: S.upto, path: full ? C.path : '', ref: S.showRef && full ? C.ref : '', now: S.upto > 0 ? C.order[S.upto - 1] : -1 });
+    $('dcv').setAttribute('aria-label', mk + ' with ' + mod.label + ' costs: ' + S.upto + ' of ' + n + ' states expanded');
+    const log = drawChart($('chart'), C.ecost, S.upto);
+    $('chartCap').textContent = 'Cost of each expanded state, in the order UCS expanded them' + (log ? ' (log scale)' : '') + '. It never goes down: that is what "cheapest first" means.';
+    $('dChecks').innerHTML = CHECKS.filter((c) => c.k in C.checks).map((c) =>
+      '<li class="' + (C.checks[c.k] ? 'ok' : 'bad') + '"><span class="m">' + (C.checks[c.k] ? '✓' : '✗') + '</span><span>' + esc(c.name) + '<small>' + esc(c.why) + '</small></span></li>').join('');
+  }
+
+  function tick() {
+    const n = LAB.cases[S.maze][S.key].order.length;
+    if (!S.playing) return;
+    S.upto = Math.min(n, S.upto + Math.max(1, Math.round(n / 140)));
+    if (S.upto >= n) halt();
+    renderDetail();
+    if (S.playing) S.timer = setTimeout(tick, 40);
+  }
+  function play() {
+    const n = LAB.cases[S.maze][S.key].order.length;
+    if (S.playing) { halt(); renderDetail(); return; }
+    if (S.upto >= n) S.upto = 0;
+    S.playing = true; renderDetail(); S.timer = setTimeout(tick, 40);
+  }
+
+  // ------------------------------------------------------------ paint bench
+  const BRUSHES = [
+    { id: 'wall', label: 'Wall' }, { id: 'c1', label: 'Cost 1', v: 1 }, { id: 'c3', label: 'Cost 3', v: 3 }, { id: 'c9', label: 'Cost 9', v: 9 },
+    { id: 'c27', label: 'Cost 27', v: 27 }, { id: 'start', label: 'Move start' }, { id: 'goal', label: 'Move goal' }
+  ];
+  const PRESETS = [
+    { id: 'c1', label: 'Constant 1', f: () => 1 }, { id: 'c5', label: 'Constant 5', f: () => 5 },
+    { id: 'east', label: 'East cheap', f: (x) => Math.pow(0.5, x) }, { id: 'west', label: 'West cheap', f: (x) => Math.pow(2, x) },
+    { id: 'rand', label: 'Random 1 to 9', f: () => 1 + Math.floor(Math.random() * 9) }, { id: 'reset', label: 'Reset maze', f: null }
+  ];
+  const P = { base: 'field', g: null, brush: 'wall', down: false, cs: 16 };
+
+  function fieldGrid() {
+    const W = 24, H = 12, wall = [], cost = [];
+    for (let x = 0; x < W; x++) { wall.push(new Array(H).fill(false)); cost.push(new Array(H).fill(1)); }
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (x === 0 || y === 0 || x === W - 1 || y === H - 1) { wall[x][y] = true; cost[x][y] = null; }
+    // a starter obstacle so the first run already has something to route around
+    for (let y = 2; y <= 8; y++) { wall[11][y] = true; cost[11][y] = null; }
+    // and a swamp of expensive cells (cost 9) between the start and the wall: the cheapest route is not the shortest one
+    for (let x = 12; x <= 16; x++) for (let y = 2; y <= 9; y++) cost[x][y] = 9;
+    return { W, H, wall, cost, start: [20, 6], goal: [3, 6] };
+  }
+  function loadBase(name) {
+    P.base = name;
+    P.g = name === 'field' ? fieldGrid() : gridFor(name, null);
+    runBench();
+  }
+
+  function paintAt(ev) {
+    const g = P.g, cv = $('pcv'), r = cv.getBoundingClientRect();
+    const x = Math.floor((ev.clientX - r.left) / P.cs), y = g.H - 1 - Math.floor((ev.clientY - r.top) / P.cs);
+    if (x <= 0 || y <= 0 || x >= g.W - 1 || y >= g.H - 1) return;      // the outer border stays a wall
+    const isStart = x === g.start[0] && y === g.start[1], isGoal = x === g.goal[0] && y === g.goal[1], b = BRUSHES.find((k) => k.id === P.brush);
+    if (b.id === 'wall') { if (!isStart && !isGoal) { g.wall[x][y] = true; g.cost[x][y] = null; } }
+    else if (b.id === 'start') { if (!isGoal) { g.wall[x][y] = false; if (g.cost[x][y] === null) g.cost[x][y] = 1; g.start = [x, y]; } }
+    else if (b.id === 'goal') { if (!isStart) { g.wall[x][y] = false; if (g.cost[x][y] === null) g.cost[x][y] = 1; g.goal = [x, y]; } }
+    else { g.wall[x][y] = false; g.cost[x][y] = b.v; }
+    drawPaint();
+  }
+
+  function drawPaint() {
+    const g = P.g;
+    P.cs = Math.max(8, Math.min(30, Math.floor(Math.min(($('pw').clientWidth || 700) / g.W, 420 / g.H))));
+    drawBoard($('pcv'), g, { cs: P.cs, cost: true });
+  }
+
+  function verdictCard(g, title, sub, el, baseline) {
+    const u = ucsPort(g), ref = dijkstra(g), size = Math.max(5, Math.min(18, Math.floor((($('pw').clientWidth || 700) / 2 - 40) / g.W)));
+    const reachable = ref.cost !== Infinity;
+    let ok, headline, rows = '';
+    if (!reachable) { ok = !u.found && u.path === ''; headline = ok ? 'No route exists, and UCS agrees (it returned an empty path).' : 'UCS found a path but Dijkstra says none exists.'; }
+    else if (!u.found) { ok = false; headline = 'UCS found no path, but one costs ' + fmtCost(ref.cost) + '.'; }
+    else { ok = close(u.cost, ref.cost) && pathCost(g, u.path) !== null && close(pathCost(g, u.path), u.cost); headline = ok ? 'UCS cost ' + fmtCost(u.cost) + ' equals the true optimum.' : 'UCS cost ' + fmtCost(u.cost) + ' but the optimum is ' + fmtCost(ref.cost) + '.'; }
+    rows = '<dl class="stats"><dt>UCS cost</dt><dd>' + esc(fmtCost(u.found ? u.cost : null)) + '</dd><dt>True optimum</dt><dd>' + esc(reachable ? fmtCost(ref.cost) : 'no route') + '</dd>' +
+      '<dt>Moves</dt><dd>' + u.path.length + '</dd><dt>States expanded</dt><dd>' + u.order.length + '</dd><dt>Cheapest first</dt><dd>' + (u.monotone ? '✓ yes' : '✗ no') + '</dd></dl>';
+    let note = '';
+    if (baseline && reachable && u.found) {
+      const quick = fewestMoves(g), qc = pathCost(g, quick);
+      note = qc !== null && !close(qc, u.cost)
+        ? '<p class="note">The path with the fewest moves has ' + quick.length + ' moves but costs ' + fmtCost(qc) + '. UCS accepted ' + (u.path.length - quick.length >= 0 ? plural(u.path.length - quick.length, 'extra move') : 'a different route') + ' to bring the cost down to ' + fmtCost(u.cost) + '.</p>'
+        : '<p class="note">Here the path with the fewest moves is also the cheapest, so UCS and BFS agree.</p>';
+    }
+    el.innerHTML = '<h3>' + esc(title) + '</h3><div class="status ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '✓ ' : '✗ ') + esc(headline) + '</div>' + rows +
+      '<div class="boardwrap"><canvas class="board" role="img" aria-label="' + esc(title) + '"></canvas></div>' + note;
+    drawBoard(el.querySelector('canvas'), g, { cs: size, cost: baseline, order: u.order, path: u.path, ref: ref.path });
+    return ok;
+  }
+
+  function runBench() {
+    drawPaint();
+    const A = copyGrid(P.g, 1), B = copyGrid(P.g);
+    const okA = verdictCard(A, 'Constant costs: every step costs 1', '', $('cardA'), false);
+    const okB = verdictCard(B, 'Your painted costs', '', $('cardB'), true);
+    $('pcv').dataset.verdict = (okA && okB) ? 'ok' : 'fail';
+  }
+
+  function buildBench() {
+    $('baseSel').innerHTML = '<option value="field">Open field 24×12</option>' + Object.keys(LAB.mazes).map((m) => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
+    $('brushes').innerHTML = BRUSHES.map((b) => '<button type="button" data-b="' + b.id + '" aria-pressed="' + (b.id === P.brush) + '">' + (b.v ? '<span class="dot" style="opacity:' + (0.25 + 0.75 * Math.log10(b.v) / Math.log10(27)).toFixed(2) + '"></span>' : '') + esc(b.label) + '</button>').join('');
+    $('presets').innerHTML = PRESETS.map((p) => '<button type="button" data-p="' + p.id + '">' + esc(p.label) + '</button>').join('');
+    $('baseSel').addEventListener('change', (ev) => loadBase(ev.target.value));
+    $('brushes').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      P.brush = b.dataset.b;
+      document.querySelectorAll('#brushes button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    });
+    $('presets').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      const p = PRESETS.find((x) => x.id === b.dataset.p);
+      if (p.f === null) { loadBase(P.base); return; }
+      const g = P.g;
+      for (let x = 0; x < g.W; x++) for (let y = 0; y < g.H; y++) if (!g.wall[x][y]) g.cost[x][y] = p.f(x, y);
+      runBench();
+    });
+    const cv = $('pcv');
+    cv.addEventListener('pointerdown', (ev) => { P.down = true; try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* not supported everywhere */ } paintAt(ev); });
+    cv.addEventListener('pointermove', (ev) => { if (P.down) paintAt(ev); });
+    const up = () => { if (P.down) { P.down = false; runBench(); } };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+  }
+
+  // ------------------------------------------------------------ setup
+  function init() {
+    $('sub').textContent = 'A test bench for your uniformCostSearch (search/search.py). It checks the claim that UCS works no matter whether step costs are constant or variable.';
+    $('foot').textContent = 'Recorded ' + LAB.meta.generated + ' from ' + LAB.meta.file + '. Re-run tools/search_visualiser/build_lab.py after changing the function. This page contains your solution logic, so keep it to yourself.';
+    checkPort();
+    renderVerdict();
+    buildMatrix();
+    buildBench();
+
+    $('dPlay').addEventListener('click', play);
+    $('dScrub').addEventListener('input', (ev) => { halt(); S.upto = +ev.target.value; renderDetail(); });
+    $('optCost').addEventListener('change', (ev) => { S.showCost = ev.target.checked; renderDetail(); });
+    $('optRef').addEventListener('change', (ev) => { S.showRef = ev.target.checked; renderDetail(); });
+
+    select(S.maze, S.key);
+    loadBase('field');
+
+    let rz = 0;
+    if (window.ResizeObserver) new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { renderDetail(); drawPaint(); runBench(); }, 120); }).observe($('dw'));
+    const themeRedraw = () => { renderDetail(); runBench(); document.querySelectorAll('#matrix .tile').forEach((t) => {
+      const g = caseGrid(t.dataset.m, t.dataset.k), C = LAB.cases[t.dataset.m][t.dataset.k];
+      drawBoard(t.querySelector('canvas'), g, { cs: Math.max(2, Math.floor(128 / g.W)), cost: true, order: C.order, path: C.path });
+    }); };
+    new MutationObserver(themeRedraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', themeRedraw); }
+
+    if (window.__LAB_TEST__) window.__LAB_TEST__.api = { ucsPort, dijkstra, fewestMoves, pathCost, copyGrid, gridFor, P, runBench, select, S };
+  }
+
+  init();
+})();
+</script>

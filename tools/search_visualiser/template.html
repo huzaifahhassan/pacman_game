@@ -1,0 +1,861 @@
+<title>Search Step Visualiser</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: an arcade screen (transport, narration, maze) on the left; an instrument rail (code, stack, path) on the right. */
+:root {
+  --font-display: "Silkscreen", "Courier New", monospace;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --bg: #edf0f8;
+  --surface: #ffffff;
+  --surface-2: #e5e9f4;
+  --ink: #10172b;
+  --ink-2: #444f6e;
+  --ink-3: #5d6788;
+  --line: #cdd4e6;
+  --accent: #2641d8;
+  --accent-ink: #ffffff;
+  --hl-next: rgba(38, 65, 216, .16);
+  --hl-ran: rgba(16, 23, 43, .07);
+  --t-visited: #b8213a;
+  --t-stack: #066e69;
+  --t-path: #7a4f00;
+  --t-ok: #12733a;
+  --stack-soft: rgba(6, 110, 105, .10);
+  --path-soft: rgba(184, 120, 0, .16);
+  --note-bg: rgba(38, 65, 216, .08);
+
+  /* the arcade board is its own screen: identical in both themes */
+  --b-board: #070b1c;
+  --b-wallfill: #0d1538;
+  --b-wall: #3a58ff;
+  --b-visited: rgba(255, 90, 110, .30);
+  --b-stack: #2fd8cf;
+  --b-stack-fill: rgba(47, 216, 207, .14);
+  --b-stack-top: rgba(47, 216, 207, .40);
+  --b-path: #ffb23e;
+  --b-pac: #ffe14d;
+  --b-pellet: #ffd2c8;
+  --b-start: #9aa7d6;
+  --b-ok: #5be28a;
+  --b-skip: #8b93ad;
+  --b-jump: rgba(255, 255, 255, .5);
+  --b-hover: #ffffff;
+  --b-costtint: #a47bff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5;
+    --line: #27345f; --accent: #8fa3ff; --accent-ink: #0a0f1f;
+    --hl-next: rgba(143, 163, 255, .22); --hl-ran: rgba(255, 255, 255, .07);
+    --t-visited: #ff8e9b; --t-stack: #56e6dc; --t-path: #ffc766; --t-ok: #6fe39a;
+    --stack-soft: rgba(86, 230, 220, .12); --path-soft: rgba(255, 199, 102, .16); --note-bg: rgba(143, 163, 255, .12);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5;
+  --line: #27345f; --accent: #8fa3ff; --accent-ink: #0a0f1f;
+  --hl-next: rgba(143, 163, 255, .22); --hl-ran: rgba(255, 255, 255, .07);
+  --t-visited: #ff8e9b; --t-stack: #56e6dc; --t-path: #ffc766; --t-ok: #6fe39a;
+  --stack-soft: rgba(86, 230, 220, .12); --path-soft: rgba(255, 199, 102, .16); --note-bg: rgba(143, 163, 255, .12);
+  color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); line-height: 1.45; }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+button, input, select { font: inherit; color: inherit; }
+
+.app { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 36px; display: flex; flex-direction: column; gap: 18px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-end; justify-content: space-between; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.3rem, 1rem + 1.3vw, 1.85rem); letter-spacing: .03em; text-wrap: balance; }
+.sub { margin: 6px 0 0; max-width: 62ch; font-size: .9rem; color: var(--ink-2); }
+.picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.picker button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0;
+  padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; text-align: left;
+}
+.picker button .n { font-family: var(--font-mono); font-weight: 600; font-size: .85rem; }
+.picker button .s { font-size: .72rem; color: var(--ink-3); max-width: 15rem; }
+.picker button[aria-pressed="true"] { border-color: var(--accent); background: var(--hl-next); }
+.picker button:hover { background: var(--surface-2); }
+.picker button[aria-pressed="true"]:hover { background: var(--hl-next); }
+.pickers { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 22px; }
+.picker.algo button .n { font-family: var(--font-display); font-size: .82rem; letter-spacing: .04em; font-weight: 700; }
+
+/* grid */
+.grid { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 960px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.panel, .transport, .narr, .board-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.panel { padding: 12px 14px 14px; }
+.ph { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px;
+  font-size: .72rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.ph .aside { font-weight: 400; letter-spacing: 0; text-transform: none; font-size: .75rem; }
+
+/* transport */
+.transport { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  font-size: .85rem; font-weight: 500; cursor: pointer;
+}
+.btns button:hover:not(:disabled) { background: var(--surface-2); }
+.btns button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 84px; }
+.btns button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.btns button:disabled { opacity: .42; cursor: default; }
+button:focus-visible, input:focus-visible, .srow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scrub input { width: 100%; accent-color: var(--accent); margin: 0; }
+.phases { display: flex; gap: 3px; margin-top: 3px; font-size: .7rem; color: var(--ink-3); }
+.phases span { padding-top: 3px; min-width: 2.6rem; border-top: 3px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phases span.on { border-top-color: var(--accent); color: var(--ink); }
+.meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; font-size: .8rem; color: var(--ink-2); }
+.meta label { display: flex; align-items: center; gap: 8px; }
+.meta input[type=range] { width: 110px; accent-color: var(--accent); }
+.meta .tabnum, .tabnum { font-variant-numeric: tabular-nums; }
+
+/* narration */
+.narr { padding: 12px 14px; min-height: 124px; }
+.narr h2 { margin: 0 0 4px; font-size: .74rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+.narr p { margin: 0; font-size: .98rem; line-height: 1.5; max-width: 68ch; }
+.narr code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.narr .note { display: block; margin-top: 8px; padding: 6px 9px; border-radius: 6px; background: var(--note-bg); font-size: .88rem; color: var(--ink-2); }
+
+/* board */
+.board-card { padding: 12px; }
+.board-wrap { display: flex; justify-content: center; min-width: 0; overflow: hidden; }
+#cv { display: block; border-radius: 6px; background: var(--b-board); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 12px 0 0; padding: 0; font-size: .75rem; color: var(--ink-2); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; flex: none; }
+.sw.pac { width: 12px; height: 12px; border-radius: 50%; background: var(--b-pac); }
+.sw.vis { width: 12px; height: 12px; border-radius: 2px; background: linear-gradient(var(--b-visited), var(--b-visited)), var(--b-board); }
+.sw.stk { width: 12px; height: 12px; border-radius: 2px; border: 2px solid var(--b-stack); background: linear-gradient(var(--b-stack-top), var(--b-stack-top)), var(--b-board); box-sizing: border-box; }
+.sw.trl { width: 16px; height: 4px; border-radius: 2px; background: var(--b-path); }
+.sw.pel { width: 8px; height: 8px; border-radius: 50%; background: var(--b-pellet); }
+.sw.sta { width: 12px; height: 12px; border-radius: 50%; border: 2px dashed var(--b-start); box-sizing: border-box; }
+.sw.cst { width: 18px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, var(--b-board), var(--b-costtint)); }
+.sw.pac, .sw.vis, .sw.stk, .sw.trl, .sw.pel, .sw.sta { box-shadow: 0 0 0 3px var(--b-board); margin-inline: 3px; }
+
+/* code */
+.codewrap { overflow-x: auto; }
+ol.code { list-style: none; margin: 0; padding: 0; font: 400 12.5px/1.7 var(--font-mono); width: 100%; }
+ol.code li { display: flex; align-items: flex-start; gap: 12px; padding: 0 10px 0 6px; border-radius: 4px; }
+ol.code .no { flex: none; width: 3ch; text-align: right; color: var(--ink-3); user-select: none; }
+ol.code .tx { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+ol.code li.ran { background: var(--hl-ran); }
+ol.code li.next { background: var(--hl-next); box-shadow: inset 3px 0 0 var(--accent); }
+ol.code li.ran::after, ol.code li.next::after { flex: none; margin-left: auto; padding-left: 14px; font: 600 10px/1.9 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+ol.code li.ran::after { content: "just ran"; }
+ol.code li.next::after { content: "next"; color: var(--accent); }
+ol.code li.ran.next::after { content: "just ran, runs again"; color: var(--accent); }
+
+/* stack */
+ul.stack { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.srow { display: grid; grid-template-columns: 2.6rem 4.4rem minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 9px;
+  border: 1px solid var(--line); border-radius: 6px; font: 400 12.5px var(--font-mono); cursor: default; }
+.srow .tag { font: 600 10px var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--t-stack); }
+.srow .xy { font-weight: 600; }
+.srow .arr { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); letter-spacing: .02em; }
+.srow .len { text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.srow.top { border-color: var(--t-stack); background: var(--stack-soft); }
+.srow.hover { outline: 2px solid var(--ink); outline-offset: -1px; }
+ul.stack .empty { padding: 10px; border: 1px dashed var(--line); border-radius: 6px; color: var(--ink-3); font-size: .85rem; }
+.hint { margin: 8px 0 0; font-size: .75rem; color: var(--ink-3); }
+
+/* variables and path */
+dl.vars { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: .82rem; }
+dl.vars dt { font-family: var(--font-mono); color: var(--ink-2); }
+dl.vars dd { margin: 0; font-family: var(--font-mono); min-width: 0; overflow-wrap: anywhere; }
+.dim { color: var(--ink-3); font-family: var(--font-ui); }
+.sc-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.sc { padding: 1px 7px; border: 1px solid var(--line); border-radius: 5px; font-size: .78rem; }
+.sc.cand { border-color: var(--accent); background: var(--hl-next); }
+.chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.chip { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 5px; background: var(--path-soft); color: var(--t-path); font: 600 13px var(--font-mono); }
+.chip.todo { opacity: .38; }
+.chip.last { outline: 2px solid var(--t-path); outline-offset: 0; }
+.pathcap { margin: 14px 0 0; }
+
+.foot { margin: 0; font-size: .75rem; color: var(--ink-3); max-width: 90ch; }
+#err { margin: 0; padding: 8px 12px; border-radius: 6px; background: #b3261e; color: #fff; font: 12px var(--font-mono); white-space: pre-wrap; }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>Search Step Visualiser</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="pickers">
+      <div class="picker algo" id="algoPicker" role="group" aria-label="Choose an algorithm"></div>
+      <div class="picker" id="picker" role="group" aria-label="Choose a maze"></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <div class="transport">
+        <div class="btns">
+          <button id="bRestart" type="button" title="Back to step 1 (R)">Restart</button>
+          <button id="bBack" type="button" title="One step back (Left arrow)">Back</button>
+          <button id="bPlay" type="button" class="primary" title="Play or pause (Space)">Play</button>
+          <button id="bStep" type="button" title="One step forward (Right arrow)">Step</button>
+          <button id="bPop" type="button" title="Jump to the next state Pacman moves to (N)">Next node</button>
+        </div>
+        <div class="scrub">
+          <input id="scrub" type="range" min="0" max="0" value="0" aria-label="Position in the recording">
+          <div class="phases" aria-hidden="true"><span id="phA">search</span><span id="phB">plan</span></div>
+        </div>
+        <div class="meta">
+          <span id="stepLbl" class="tabnum"></span>
+          <label for="speed">Speed <input id="speed" type="range" min="0" max="4" value="1"><output id="speedOut" class="tabnum"></output></label>
+        </div>
+      </div>
+
+      <div class="narr" aria-live="polite">
+        <h2 id="nh"></h2>
+        <p id="np"></p>
+      </div>
+
+      <div class="board-card">
+        <div class="board-wrap" id="bw"><canvas id="cv" role="img" aria-label="Maze"></canvas></div>
+        <ul class="legend">
+          <li><span class="sw pac"></span>Pacman = <code>current_state</code></li>
+          <li><span class="sw vis"></span>Expanded (<code>visited</code>)</li>
+          <li><span class="sw stk"></span><span id="legStack"></span></li>
+          <li><span class="sw trl"></span><code>path</code> from the start</li>
+          <li><span class="sw pel"></span>Goal</li>
+          <li><span class="sw sta"></span>Start</li>
+          <li id="legCost" hidden><span class="sw cst"></span>Step cost (brighter = dearer)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col">
+      <section class="panel">
+        <h3 class="ph"><span id="codeTitle"></span><span class="aside" id="codeAside"></span></h3>
+        <div class="codewrap"><ol class="code" id="code"></ol></div>
+      </section>
+
+      <section class="panel">
+        <h3 class="ph"><span id="cTitle"></span><span class="aside tabnum" id="stackN"></span></h3>
+        <ul class="stack" id="stack"></ul>
+        <p class="hint" id="stackHint"></p>
+      </section>
+
+      <section class="panel">
+        <h3 class="ph"><span>Variables</span></h3>
+        <dl class="vars">
+          <dt id="kCur">current_state</dt><dd id="vCur"></dd>
+          <dt>successor, action</dt><dd id="vSucc"></dd>
+          <dt>getSuccessors</dt><dd id="vCalls"></dd>
+          <dt>visited</dt><dd id="vVis"></dd>
+          <dt id="kCost" hidden>cost</dt><dd id="vCost" hidden></dd>
+          <dt id="kCosts" hidden>step_cost, new_cost</dt><dd id="vCosts" hidden></dd>
+        </dl>
+        <h3 class="ph pathcap"><span>path &middot; actions from the start</span><span class="aside" id="pathN"></span></h3>
+        <div class="chips" id="chips"></div>
+      </section>
+    </div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+  <pre id="err" hidden></pre>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const DATA = /*__DATA__*/null;
+  const INIT = /*__INIT__*/null;
+
+  const $ = (id) => document.getElementById(id);
+  const errBox = $('err');
+  window.addEventListener('error', (ev) => {
+    errBox.hidden = false;
+    errBox.textContent += (ev.message || 'Script error') + ' (line ' + ev.lineno + ')\n';
+  });
+
+  const DIR = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] };
+  const ARROW = { N: '↑', S: '↓', E: '→', W: '←' };
+  const WORD = { N: 'North', S: 'South', E: 'East', W: 'West' };
+  const FACE = { E: 0, S: Math.PI / 2, W: Math.PI, N: -Math.PI / 2 };
+  const SPEED_MS = [1200, 600, 300, 120, 30];
+  const SPEED_LABEL = ['0.5×', '1×', '2×', '5×', '20×'];
+  // the container is a stack for DFS and a queue for BFS; its last list item is always the next one popped
+  const BOX = {
+    stack: { title: 'Stack', tag: 'Top', word: 'stack', rule: 'last in, first out', legend: 'On the stack (bright = top, popped next)', aria: 'Stack entries, top first' },
+    queue: { title: 'Queue', tag: 'Front', word: 'queue', rule: 'first in, first out', legend: 'In the queue (bright = front, popped next)', aria: 'Queue entries, front first' },
+    pq: { title: 'Priority queue', tag: 'Next', word: 'priority queue', rule: 'cheapest first, with ties first in, first out', legend: 'In the priority queue (bright = cheapest, popped next)', aria: 'Priority queue entries, cheapest first' }
+  };
+
+  const S = { algo: null, name: null, idx: 0, playing: false, speed: 1, hover: -1, timer: 0, vw: null, liNext: null, liRan: null, chipKey: '' };
+  let L = null, A = null, B = null;       // current layout recording, algorithm record, container words
+  let codeEls = {};
+
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const xy = (p) => '(' + p[0] + ', ' + p[1] + ')';
+  const bxy = (p) => '<b>' + xy(p) + '</b>';
+  const arrows = (s) => s.split('').map((c) => ARROW[c]).join('');
+  const plural = (n, w) => n + ' ' + (n === 1 ? w : (w === 'entry' ? 'entries' : w + 's'));
+  const fmtCost = (c) => {
+    if (typeof c !== 'number') return '';
+    if (Number.isInteger(c)) return c >= 1e7 ? c.toExponential(2).replace('e+', 'e') : String(c);
+    return c >= 1e6 ? c.toExponential(2).replace('e+', 'e') : String(+c.toFixed(4));
+  };
+
+  // ------------------------------------------------------------ data prep
+  function prepare(algoKey, name) {
+    const a = DATA.algos[algoKey], raw = a.layouts[name];
+    const W = raw.w, H = raw.h;
+    const wall = [];
+    for (let x = 0; x < W; x++) wall.push(new Array(H).fill(false));
+    raw.walls.forEach((row, r) => { const y = H - 1 - r; for (let x = 0; x < W; x++) wall[x][y] = row[x] === '#'; });
+
+    const ev = raw.ev, E = ev.length;
+    // frames where Pacman's marker arrives at a new state; remember when that was a jump
+    const arrive = new Set(a.arrive);
+    const nodes = [], jump = {}, lastMove = new Array(E).fill(-1);
+    let lastExpanded = null, lm = -1;
+    for (let k = 0; k < E; k++) {
+      if (k > 0 && arrive.has(ev[k - 1].r) && ev[k].cs) {
+        lm = k;
+        if (ev[k - 1].r !== 'set_start') nodes.push(k);
+        const here = ev[k].cs;
+        jump[k] = lastExpanded && Math.abs(here[0] - lastExpanded[0]) + Math.abs(here[1] - lastExpanded[1]) > 1 ? lastExpanded : null;
+        const skipped = k + 1 < E && ev[k].r === 'check_visited' && ev[k + 1].r === 'skip';   // DFS duplicate entries are never expanded
+        if (!skipped) lastExpanded = here;
+      }
+      lastMove[k] = lm;
+    }
+    let cmLo = Infinity, cmHi = -Infinity;      // range of the per-cell step cost (log10), when the cost varies
+    if (raw.cm) raw.cm.forEach((row) => row.forEach((v) => { if (v !== null) { cmLo = Math.min(cmLo, v); cmHi = Math.max(cmHi, v); } }));
+    // a frame worth showing at rest: just after the second expansion pushed its first successor
+    let rest = 0;
+    for (let k = 1; k < E; k++) { if (ev[k - 1].r === 'push_succ' && ev[k].v >= 2) { rest = k; break; } }
+
+    return { algo: algoKey, name, W, H, wall, start: raw.start, goal: raw.goal, entries: raw.entries, paths: raw.paths, visited: raw.visited,
+      calls: raw.calls, ev, E, nodes, jump, lastMove, sol: raw.solution, total: E + 1 + raw.solution.length, stats: raw.stats, rest, cs: 16,
+      cm: raw.cm || null, cmLo, cmHi };
+  }
+
+  function posAfter(start, str, n) {
+    let x = start[0], y = start[1];
+    for (let i = 0; i < n; i++) { const d = DIR[str[i]]; x += d[0]; y += d[1]; }
+    return [x, y];
+  }
+  function trailPoints(start, str, n) {
+    const pts = [start.slice()];
+    let x = start[0], y = start[1];
+    for (let i = 0; i < n; i++) { const d = DIR[str[i]]; x += d[0]; y += d[1]; pts.push([x, y]); }
+    return pts;
+  }
+
+  function view(idx) {
+    if (idx < L.E) {
+      const e = L.ev[idx];
+      return { mode: 'search', idx, e, prev: idx > 0 ? L.ev[idx - 1] : null, j: 0,
+        pos: e.cs ? e.cs.slice() : L.start.slice(), pathStr: typeof e.p === 'number' ? L.paths[e.p] : '', stack: e.k, nv: e.v };
+    }
+    const j = idx - L.E, last = L.ev[L.E - 1];
+    return { mode: 'walk', idx, e: null, prev: null, j, pos: posAfter(L.start, L.sol, j), pathStr: L.sol, stack: last.k, nv: last.v };
+  }
+
+  // ------------------------------------------------------------ canvas
+  function fit() {
+    const wrap = $('bw');
+    const availW = Math.max(160, wrap.clientWidth);
+    const availH = Math.max(300, Math.round(window.innerHeight * 0.72));
+    const cs = Math.max(6, Math.min(52, Math.floor(Math.min(availW / L.W, availH / L.H))));
+    L.cs = cs;
+    const cv = $('cv'), dpr = window.devicePixelRatio || 1;
+    cv.style.width = L.W * cs + 'px';
+    cv.style.height = L.H * cs + 'px';
+    cv.width = Math.round(L.W * cs * dpr);
+    cv.height = Math.round(L.H * cs * dpr);
+    cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function draw(vw) {
+    const cv = $('cv'), ctx = cv.getContext('2d');
+    const cs = L.cs, W = L.W, H = L.H;
+    const css = getComputedStyle(document.documentElement);
+    const col = (n) => css.getPropertyValue(n).trim();
+    const X = (x) => x * cs, Y = (y) => (H - 1 - y) * cs;
+    const cx = (x) => X(x) + cs / 2, cy = (y) => Y(y) + cs / 2;
+    const lw = Math.max(1.5, cs * 0.1);
+
+    ctx.clearRect(0, 0, W * cs, H * cs);
+    ctx.fillStyle = col('--b-board');
+    ctx.fillRect(0, 0, W * cs, H * cs);
+
+    // step-cost landscape, only when the cost varies: brighter = more expensive per step
+    if (L.cm && L.cmHi > L.cmLo) {
+      ctx.fillStyle = col('--b-costtint');
+      for (let r = 0; r < H; r++) {
+        for (let x = 0; x < W; x++) {
+          const v = L.cm[r][x];
+          if (v === null) continue;
+          ctx.globalAlpha = 0.03 + 0.30 * (v - L.cmLo) / (L.cmHi - L.cmLo);
+          ctx.fillRect(x * cs, r * cs, cs, cs);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // expanded cells
+    ctx.fillStyle = col('--b-visited');
+    for (let i = 0; i < vw.nv; i++) { const c = L.visited[i]; ctx.fillRect(X(c[0]) + 1, Y(c[1]) + 1, cs - 2, cs - 2); }
+
+    // walls: dark fill with a bright outline wherever the wall touches open floor
+    const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !L.wall[x][y];
+    ctx.fillStyle = col('--b-wallfill');
+    ctx.strokeStyle = col('--b-wall');
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let x = 0; x < W; x++) {
+      for (let y = 0; y < H; y++) {
+        if (!L.wall[x][y]) continue;
+        ctx.fillRect(X(x), Y(y), cs, cs);
+        if (open(x, y + 1)) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x) + cs, Y(y)); }
+        if (open(x, y - 1)) { ctx.moveTo(X(x), Y(y) + cs); ctx.lineTo(X(x) + cs, Y(y) + cs); }
+        if (open(x - 1, y)) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x), Y(y) + cs); }
+        if (open(x + 1, y)) { ctx.moveTo(X(x) + cs, Y(y)); ctx.lineTo(X(x) + cs, Y(y) + cs); }
+      }
+    }
+    ctx.stroke();
+
+    // container entries: cells waiting to be popped, the next one brighter
+    const sl = Math.max(2, cs * 0.09);
+    ctx.lineWidth = sl;
+    ctx.strokeStyle = col('--b-stack');
+    vw.stack.forEach((id, i) => {
+      const en = L.entries[id], top = i === vw.stack.length - 1;
+      ctx.fillStyle = col(top ? '--b-stack-top' : '--b-stack-fill');
+      ctx.fillRect(X(en[0]) + 1, Y(en[1]) + 1, cs - 2, cs - 2);
+      ctx.strokeRect(X(en[0]) + sl / 2 + 1, Y(en[1]) + sl / 2 + 1, cs - sl - 2, cs - sl - 2);
+    });
+
+    // goal pellet and start marker
+    ctx.fillStyle = col('--b-pellet');
+    ctx.beginPath(); ctx.arc(cx(L.goal[0]), cy(L.goal[1]), Math.max(2.5, cs * 0.17), 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = col('--b-start');
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.arc(cx(L.start[0]), cy(L.start[1]), cs * 0.36, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Pacman jumped here from the previous expansion: no walking back
+    if (vw.mode === 'search') {
+      const from = L.jump[L.lastMove[vw.idx]];
+      if (from) {
+        ctx.strokeStyle = col('--b-jump'); ctx.lineWidth = 1.5; ctx.setLineDash([2, 4]);
+        ctx.beginPath(); ctx.moveTo(cx(from[0]), cy(from[1])); ctx.lineTo(cx(vw.pos[0]), cy(vw.pos[1])); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // path trail from the start
+    const pl = Math.max(2, cs * 0.16);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const line = (pts) => { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(cx(p[0]), cy(p[1])) : ctx.moveTo(cx(p[0]), cy(p[1])))); ctx.stroke(); };
+    ctx.lineWidth = pl;
+    if (vw.mode === 'walk') {
+      ctx.strokeStyle = col('--b-path'); ctx.globalAlpha = 0.28; ctx.setLineDash([pl * 1.4, pl * 1.8]);
+      line(trailPoints(L.start, L.sol, L.sol.length));
+      ctx.globalAlpha = 1; ctx.setLineDash([]);
+      line(trailPoints(L.start, L.sol, vw.j));
+    } else {
+      ctx.strokeStyle = col('--b-path'); ctx.globalAlpha = 0.95;
+      line(trailPoints(L.start, vw.pathStr, vw.pathStr.length));
+      ctx.globalAlpha = 1;
+    }
+
+    // an entry the reader is pointing at: draw the whole path it carries
+    if (S.hover >= 0 && vw.stack.indexOf(S.hover) >= 0) {
+      const en = L.entries[S.hover];
+      ctx.strokeStyle = col('--b-stack'); ctx.lineWidth = Math.max(2, cs * 0.12); ctx.setLineDash([cs * 0.35, cs * 0.3]);
+      line(trailPoints(L.start, en[2], en[2].length));
+      ctx.setLineDash([]);
+      ctx.strokeStyle = col('--b-hover'); ctx.lineWidth = 2;
+      ctx.strokeRect(X(en[0]) + 1, Y(en[1]) + 1, cs - 2, cs - 2);
+    }
+
+    // successor being considered
+    if (vw.mode === 'search') {
+      const e = vw.e, p = vw.prev;
+      let cand = null, c = '--b-hover';
+      if (e.s) { cand = e.s; c = e.r === 'push_succ' ? '--b-ok' : '--b-hover'; }
+      else if (p && p.r === 'check_succ' && p.s) { cand = p.s; c = '--b-skip'; }
+      if (cand) {
+        ctx.strokeStyle = col(c); ctx.lineWidth = Math.max(2, cs * 0.1);
+        ctx.beginPath(); ctx.arc(cx(cand[0]), cy(cand[1]), cs * 0.36, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // Pacman, facing the direction of his last move
+    const n = vw.mode === 'walk' ? vw.j : vw.pathStr.length;
+    const face = n > 0 ? vw.pathStr[n - 1] : 'E';
+    const a = FACE[face], mouth = 0.62, r = cs * 0.42;
+    ctx.fillStyle = col('--b-pac');
+    ctx.beginPath();
+    ctx.moveTo(cx(vw.pos[0]), cy(vw.pos[1]));
+    ctx.arc(cx(vw.pos[0]), cy(vw.pos[1]), r, a + mouth, a + Math.PI * 2 - mouth);
+    ctx.closePath(); ctx.fill();
+
+    cv.setAttribute('aria-label', 'Maze ' + L.name + '. Pacman at ' + xy(vw.pos) + '. ' + plural(vw.nv, 'cell') + ' expanded, ' + plural(vw.stack.length, 'entry') + ' in the ' + B.word + '.');
+  }
+
+  // ------------------------------------------------------------ narration
+  function pathWords(str) {
+    if (!str.length) return '<code>[]</code>';
+    const w = str.split('').map((c) => WORD[c]);
+    if (w.length <= 6) return '<code>[' + w.join(', ') + ']</code>';
+    return '<b>' + w.length + ' actions</b> (the last two are <code>' + w.slice(-2).join(', ') + '</code>)';
+  }
+
+  function jumpNote(vw) {
+    const from = L.jump[L.lastMove[vw.idx]];
+    if (!from) return '';
+    const why = {
+      stack: 'The entry carries its whole route from the start, so the search never has to walk back out of a dead end.',
+      queue: 'Neighbours in the queue are not on one walk, and they do not need to be: every entry carries its own route from the start.',
+      pq: 'The heap is ordered by cost, not by position, so the cheapest entry can be anywhere in the maze. Every entry carries its own route from the start, so nothing needs walking back.'
+    }[A.container];
+    return '<span class="note">Pacman jumps here from ' + xy(from) + '. ' + why + '</span>';
+  }
+
+  function visitedHas(nv, s) {
+    for (let i = 0; i < nv; i++) { const c = L.visited[i]; if (c[0] === s[0] && c[1] === s[1]) return true; }
+    return false;
+  }
+
+  function narrate(vw) {
+    const pq = A.container === 'pq', isQueue = A.container === 'queue';
+    if (vw.mode === 'walk') {
+      const n = L.sol.length, j = vw.j;
+      if (j === 0) return ['Search finished', '<code>' + A.func + '</code> returned a plan of <b>' + n + ' actions</b>' + (pq ? ' costing <b>' + fmtCost(L.stats.cost) + '</b> in total' : '') + '. <code>SearchAgent</code> now gives them to Pacman one per turn. Press <b>Step</b> to watch him follow the path.'];
+      const a = L.sol[j - 1];
+      return ['Move ' + j + ' of ' + n, 'Pacman moves <b>' + WORD[a] + '</b> ' + ARROW[a] + ' to ' + bxy(vw.pos) + '.' + (j === n ? ' He eats the pellet and the game is won.' : '')];
+    }
+    const e = vw.e, p = vw.prev, cur = bxy(vw.pos);
+    if (!p) return ['Ready', 'Nothing has run yet. Press <b>Step</b> to run the first line of <code>' + A.func + '</code>.'];
+    const goalNext = e.r === 'return_path' || e.r === 'set_path' || e.r === 'set_flag';
+    switch (p.r) {
+      case 'init_stack': return ['Set up', 'Created an empty ' + B.word + ', <code>to_visit</code>. It is ' + B.rule + '.'];
+      case 'push_start': return ['Set up', 'Pushed the first entry: ' + bxy(L.start) + ' with an empty path <code>[]</code>' + (pq ? ' and cost 0' : '') + '. Every entry is a <code>(state, path' + (pq ? ', cost' : '') + ')</code> ' + (pq ? 'triple' : 'pair') + '.'];
+      case 'init_visited': return ['Set up', 'Created the empty <code>visited</code> set. A state goes in only when it is expanded.'];
+      case 'init_path': return ['Set up', 'Created <code>path = []</code>. It will hold the actions that lead from the start to <code>current_state</code>.'];
+      case 'init_flag': return ['Set up', '<code>goal_reached</code> is False, so the loop runs until the goal comes off the queue.'];
+      case 'set_start': return ['Set up', '<code>current_state</code> starts as ' + bxy(L.start) + '. Pacman is on the start cell.'];
+      case 'expand': {
+        const call = L.calls[e.n - 1];
+        return ['Expand', '<code>getSuccessors(' + xy(vw.pos) + ')</code> returned ' + plural(call ? call[1].length : 0, 'move') + '.'];
+      }
+      case 'pop': {
+        if (isQueue) {
+          const pe = typeof e.pe === 'number' ? L.entries[e.pe] : null;
+          return ['Pop from the queue', 'Took the entry at the <b>front</b>, the oldest one waiting' + (pe ? ': ' + bxy([pe[0], pe[1]]) + ' with ' + pathWords(pe[2]) : '') + '. It is held in <code>current_state_action</code> for now.'];
+        }
+        if (pq) return ['Pop the cheapest', 'Popped the cheapest entry. <code>current_state</code> = ' + cur + ', <code>path</code> = ' + pathWords(vw.pathStr) + ', <code>cost</code> = <b>' + fmtCost(e.g) + '</b>.' + jumpNote(vw)];
+        return ['Pop from the stack', 'Popped the top entry. <code>current_state</code> = ' + cur + ', <code>path</code> = ' + pathWords(vw.pathStr) + '.' + jumpNote(vw)];
+      }
+      case 'take_state': return ['Move to that state', '<code>current_state</code> = ' + cur + '.' + jumpNote(vw) +
+        '<span class="note"><code>path</code> still holds the previous route, so the trail has not caught up yet. It does when <code>path = current_action</code> runs.</span>'];
+      case 'take_path': {
+        const pe = typeof e.pe === 'number' ? L.entries[e.pe] : null;
+        return ['Take its route', '<code>current_action</code> = ' + (pe ? pathWords(pe[2]) : 'the entry\u2019s route') + '. The name says action, but this holds the whole route from the start.'];
+      }
+      case 'set_path': return ['Update path', '<code>path</code> now holds the route to ' + cur + ': ' + pathWords(vw.pathStr) + '.'];
+      case 'set_flag': return ['Goal flag', '<code>goal_reached</code> is now True.'];
+      case 'check_visited':
+        return e.r === 'skip'
+          ? ['Duplicate entry', pq
+              ? cur + ' is already in <code>visited</code>. A cheaper route to it was popped earlier, so this entry is a dearer duplicate. Skip it.'
+              : cur + ' is already in <code>visited</code>. Two routes pushed it, and it was expanded the first time it was popped. Skip this copy.']
+          : ['Not expanded yet', cur + ' is not in <code>visited</code>, so the search carries on.'];
+      case 'skip': return ['Skipped', 'Back to the top of the loop to pop the next entry.'];
+      case 'goal_test':
+        return goalNext
+          ? ['Goal found', '<code>isGoalState(' + xy(vw.pos) + ')</code> is true: this is the pellet. The goal test runs when an entry is popped, never when it is pushed' + (pq ? ', because a cheaper route to the goal could still be waiting in the heap. Nothing cheaper is, so this one is optimal' : '') + '.']
+          : ['Not the goal', '<code>isGoalState(' + xy(vw.pos) + ')</code> is false.'];
+      case 'mark': return ['Mark as visited', 'Added ' + cur + ' to <code>visited</code>. ' + plural(vw.nv, 'cell') + ' expanded so far.'];
+      case 'for_succ': {
+        if (e.r === 'check_succ') {
+          const fresh = e.n !== p.n;
+          return ['Next successor', (fresh ? '<code>getSuccessors(' + xy(vw.pos) + ')</code> answered. ' : '') + 'Looking at ' + bxy(e.s) + ', reached by <b>' + WORD[e.a] + '</b> ' + ARROW[e.a] + '.'];
+        }
+        return ['No more successors', 'Every neighbour of ' + cur + ' has been looked at.' + (isQueue ? ' Next, ' + cur + ' is marked as visited.' : ' Back to the top of the loop.')];
+      }
+      case 'check_succ': {
+        const s = e.s || p.s;
+        if (e.r === 'push_succ' || e.r === 'add_cost') {
+          return ['Not visited', bxy(s) + (isQueue ? ' is not in <code>visited</code> and is not already waiting in the queue, so it gets pushed.' : ' is not in <code>visited</code>, so it gets pushed' + (pq ? ', even if a copy is already in the heap: this route may be cheaper.' : '.'))];
+        }
+        if (isQueue && !visitedHas(vw.nv, s)) {
+          return ['Already queued', bxy(s) + ' is already waiting in the queue, reached by another route. Pushing it again would make a duplicate, so skip it.'];
+        }
+        return ['Already visited', bxy(s) + ' is already in <code>visited</code>. Do not push it.'];
+      }
+      case 'add_cost':
+        return ['Add up the cost', 'Reaching ' + bxy(e.s || p.s) + ' costs <b>' + fmtCost(e.tc) + '</b> in total: the <code>cost</code> so far, ' + fmtCost(e.g) + ', plus this step\u2019s <code>step_cost</code> of ' + fmtCost(e.sc) + '.'];
+      case 'push_succ':
+        if (pq) return ['Push with its cost', 'Pushed ' + bxy(p.s) + ' with <code>path + [' + WORD[p.a] + ']</code> and priority <b>' + fmtCost(p.tc) + '</b>. The heap keeps the cheapest entry at the front, wherever it is in the maze.'];
+        return ['Push', 'Pushed ' + bxy(p.s) + ' with <code>path + [' + WORD[p.a] + ']</code>, now <b>' + plural(vw.pathStr.length + 1, 'action') + '</b> long. ' +
+          (isQueue ? 'It joins the <b>back</b> of the queue, behind everything already waiting.' : 'It sits on top, so it is the next one popped.')];
+      case 'return_path': return ['Done', '<code>' + A.func + '</code> returns <code>path</code>: <b>' + plural(vw.pathStr.length, 'action') + '</b>' + (pq ? ' costing <b>' + fmtCost(L.stats.cost) + '</b>' : '') + ' from the start to the pellet. ' + plural(vw.nv, 'cell') + ' were expanded to find it.'];
+      case 'return_empty': return ['No solution', 'The ' + B.word + ' ran empty without reaching the goal, so the function returns <code>[]</code>.'];
+      default: return ['Step', 'Executed line ' + p.l + '.'];
+    }
+  }
+
+  // ------------------------------------------------------------ panels
+  function updateCode(vw) {
+    if (S.liNext) S.liNext.classList.remove('next');
+    if (S.liRan) S.liRan.classList.remove('ran');
+    S.liNext = S.liRan = null;
+    if (vw.mode !== 'search') return;
+    const nx = vw.e.r === 'done' ? null : codeEls[vw.e.l];
+    if (nx) { nx.classList.add('next'); S.liNext = nx; }
+    const rn = vw.prev ? codeEls[vw.prev.l] : null;
+    if (rn) { rn.classList.add('ran'); S.liRan = rn; }
+  }
+
+  function updateVars(vw) {
+    const pq = A.container === 'pq';
+    $('kCur').textContent = vw.mode === 'walk' ? 'pacman at' : 'current_state';
+    $('vCur').innerHTML = vw.mode === 'search' && !vw.e.cs ? '<span class="dim">not set yet</span>' : esc(xy(vw.pos));
+    let cand = null;
+    if (vw.mode === 'search') cand = vw.e.s ? { s: vw.e.s, a: vw.e.a } : (vw.prev && vw.prev.r === 'check_succ' && vw.prev.s ? { s: vw.prev.s, a: vw.prev.a } : null);
+    $('vSucc').innerHTML = cand ? esc(xy(cand.s)) + ', ' + WORD[cand.a] + ' ' + ARROW[cand.a] : '<span class="dim">not inside the loop</span>';
+    let calls = '<span class="dim">not called for this state yet</span>';
+    if (vw.mode === 'search' && vw.e.n > 0 && vw.e.cs) {
+      const call = L.calls[vw.e.n - 1];
+      if (call && call[0][0] === vw.pos[0] && call[0][1] === vw.pos[1]) {
+        calls = '<span class="sc-list">' + call[1].map((s) => {
+          const on = cand && cand.s[0] === s[0] && cand.s[1] === s[1];
+          return '<span class="sc' + (on ? ' cand' : '') + '">' + ARROW[s[2]] + ' ' + esc(xy(s)) + '</span>';
+        }).join('') + '</span>';
+      }
+    }
+    $('vCalls').innerHTML = calls;
+    $('vVis').textContent = plural(vw.nv, 'cell');
+
+    ['kCost', 'vCost', 'kCosts', 'vCosts'].forEach((id) => { $(id).hidden = !pq; });
+    if (pq) {
+      $('vCost').innerHTML = vw.mode === 'walk' ? esc(fmtCost(L.stats.cost)) + ' in total'
+        : (typeof vw.e.g === 'number' ? esc(fmtCost(vw.e.g)) : '<span class="dim">not set yet</span>');
+      const e = vw.e, p = vw.prev;
+      const sc = vw.mode === 'search' ? (typeof e.sc === 'number' ? e.sc : (p && p.r === 'check_succ' && typeof p.sc === 'number' ? p.sc : null)) : null;
+      const tc = vw.mode === 'search' && typeof e.tc === 'number' ? e.tc : null;
+      $('vCosts').innerHTML = sc === null ? '<span class="dim">not inside the loop</span>'
+        : esc(fmtCost(sc)) + (tc === null ? '' : ', ' + esc(fmtCost(tc)) + ' <span class="dim">(= cost + step_cost)</span>');
+    }
+  }
+
+  function updateStack(vw) {
+    const ul = $('stack'), st = vw.stack, pq = A.container === 'pq';
+    $('stackN').textContent = plural(st.length, 'entry');
+    $('stackHint').innerHTML = vw.mode === 'walk'
+      ? 'The search is over; this is what was left in the ' + B.word + ' when the function returned.'
+      : 'Each entry is a <code>(state, path' + (pq ? ', cost' : '') + ')</code> ' + (pq ? 'triple' : 'pair') + '. ' +
+        (pq ? 'The number on the right is its cost, which is also its priority. ' : '') + 'Hover or focus a row to draw its path on the maze.';
+    if (!st.length) { ul.innerHTML = '<li class="empty">Empty</li>'; return; }
+    let h = '';
+    for (let i = st.length - 1; i >= 0; i--) {
+      const id = st[i], en = L.entries[id], path = en[2];
+      const a = path.length > 16 ? '\u2026' + arrows(path.slice(-16)) : arrows(path);
+      const last = pq && typeof en[3] === 'number' ? fmtCost(en[3]) : String(path.length);
+      h += '<li class="srow' + (i === st.length - 1 ? ' top' : '') + (id === S.hover ? ' hover' : '') + '" data-eid="' + id + '" tabindex="0" title="' +
+        path.length + ' actions from the start' + (pq && typeof en[3] === 'number' ? ', total cost ' + fmtCost(en[3]) : '') + '">' +
+        '<span class="tag">' + (i === st.length - 1 ? B.tag : '') + '</span><span class="xy">' + esc(xy(en)) + '</span>' +
+        '<span class="arr">' + (a || '[]') + '</span><span class="len">' + last + '</span></li>';
+    }
+    ul.innerHTML = h;
+  }
+
+  function updateChips(vw) {
+    const str = vw.pathStr, n = vw.mode === 'walk' ? vw.j : str.length;
+    const key = vw.mode + '|' + str + '|' + n;
+    $('pathN').textContent = vw.mode === 'walk' ? n + ' of ' + str.length + ' taken' : plural(str.length, 'action');
+    if (key === S.chipKey) return;
+    S.chipKey = key;
+    if (!str.length) { $('chips').innerHTML = '<span class="dim">[] (empty)</span>'; return; }
+    let h = '';
+    for (let i = 0; i < str.length; i++) {
+      let c = 'chip';
+      if (vw.mode === 'walk' && i >= n) c += ' todo';
+      if (i === n - 1) c += ' last';
+      h += '<span class="' + c + '" title="' + WORD[str[i]] + '">' + ARROW[str[i]] + '</span>';
+    }
+    $('chips').innerHTML = h;
+  }
+
+  function updateTransport(vw) {
+    const last = L.total - 1;
+    $('bBack').disabled = S.idx === 0;
+    $('bRestart').disabled = S.idx === 0;
+    $('bStep').disabled = S.idx >= last;
+    $('bPop').disabled = S.idx >= L.E - 1;
+    $('bPlay').textContent = S.playing ? 'Pause' : (S.idx >= last ? 'Replay' : 'Play');
+    $('scrub').value = S.idx;
+    $('stepLbl').textContent = 'Step ' + (S.idx + 1) + ' of ' + L.total + (vw.mode === 'walk' ? ' · following the plan' : ' · searching');
+    $('phA').classList.toggle('on', vw.mode === 'search');
+    $('phB').classList.toggle('on', vw.mode === 'walk');
+    $('codeAside').textContent = vw.mode === 'walk' ? 'finished' : 'line ' + vw.e.l + (vw.e.r === 'done' ? ' (returned)' : ' runs next');
+  }
+
+  function render() {
+    const vw = view(S.idx);
+    S.vw = vw;
+    draw(vw);
+    updateCode(vw);
+    updateVars(vw);
+    updateStack(vw);
+    updateChips(vw);
+    const nar = narrate(vw);
+    $('nh').textContent = nar[0];
+    $('np').innerHTML = nar[1];
+    updateTransport(vw);
+  }
+
+  // ------------------------------------------------------------ controls
+  function go(i) { S.idx = Math.max(0, Math.min(L.total - 1, i)); render(); }
+  function halt() { S.playing = false; clearTimeout(S.timer); }
+  function nextNode() {
+    if (S.idx >= L.E - 1) return;
+    const k = L.nodes.find((q) => q > S.idx);
+    go(k === undefined ? L.E - 1 : k);
+  }
+  function tick() {
+    if (!S.playing) return;
+    go(S.idx + 1);
+    if (S.idx >= L.total - 1) { halt(); render(); return; }
+    S.timer = setTimeout(tick, SPEED_MS[S.speed]);
+  }
+  function play() {
+    if (S.playing) { halt(); render(); return; }
+    if (S.idx >= L.total - 1) S.idx = 0;
+    S.playing = true;
+    render();
+    S.timer = setTimeout(tick, SPEED_MS[S.speed]);
+  }
+  const manual = (fn) => () => { halt(); fn(); };
+
+  function setHover(id) {
+    if (S.hover === id) return;
+    S.hover = id;
+    document.querySelectorAll('#stack .srow').forEach((li) => li.classList.toggle('hover', +li.dataset.eid === id));
+    if (S.vw) draw(S.vw);
+  }
+
+  function buildPickers() {
+    const a = DATA.algos[S.algo];
+    $('algoPicker').innerHTML = Object.keys(DATA.algos).map((k) => {
+      const x = DATA.algos[k];
+      return '<button type="button" data-algo="' + k + '" aria-pressed="false"><span class="n">' + x.label + '</span><span class="s">' + x.func + '</span></button>';
+    }).join('');
+    $('picker').innerHTML = Object.keys(a.layouts).map((n) => {
+      const lay = a.layouts[n], s = lay.stats;
+      const result = a.container === 'pq' ? 'cost ' + fmtCost(s.cost) : s.pathLen + ' moves';
+      return '<button type="button" data-name="' + esc(n) + '" aria-pressed="false"><span class="n">' + esc(lay.title || n) + '</span><span class="s">' +
+        (lay.note ? esc(lay.note) + ' &middot; ' : '') + s.expanded + ' expansions &middot; ' + result + '</span></button>';
+    }).join('');
+    document.querySelectorAll('#algoPicker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.algo === S.algo)));
+    document.querySelectorAll('#picker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.name === S.name)));
+  }
+
+  function buildCode() {
+    $('code').innerHTML = A.code.map((c) => '<li data-ln="' + c[0] + '"><span class="no">' + c[0] + '</span><span class="tx">' + esc(c[1]) + '</span></li>').join('');
+    codeEls = {};
+    document.querySelectorAll('#code li').forEach((li) => { codeEls[li.dataset.ln] = li; });
+    S.liNext = S.liRan = null;
+  }
+
+  function load(algoKey, name, idx) {
+    halt();
+    const algoChanged = S.algo !== algoKey;
+    S.algo = algoKey; S.name = name; S.hover = -1; S.chipKey = '';
+    A = DATA.algos[algoKey];
+    B = BOX[A.container];
+    L = prepare(algoKey, name);
+
+    $('sub').innerHTML = 'A recording of your <code>' + A.func + '</code>, taken by running the real function line by line. Step through it to see the ' + B.word + ', the path and the variables change.';
+    $('foot').textContent = 'Recorded ' + A.meta.generated + ' from ' + A.meta.file + ' lines ' + A.meta.first + '–' + A.meta.last + '. If you change the function, this recording is out of date. It contains your solution, so keep it to yourself.';
+    $('codeTitle').textContent = 'search.py · ' + A.func;
+    $('cTitle').textContent = B.title + ' · to_visit';
+    $('legStack').textContent = B.legend;
+    $('legCost').hidden = !(L.cm && L.cmHi > L.cmLo);
+    $('stack').setAttribute('aria-label', B.aria);
+    if (algoChanged || !Object.keys(codeEls).length) buildCode();
+    buildPickers();
+
+    $('scrub').max = L.total - 1;
+    $('phA').style.flex = String(L.E);
+    $('phB').style.flex = String(L.sol.length + 1);
+    fit();
+    S.idx = typeof idx === 'number' ? Math.max(0, Math.min(L.total - 1, idx)) : 0;
+    render();
+  }
+
+  // ------------------------------------------------------------ one-time setup
+  function init() {
+    $('algoPicker').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button');
+      if (b && b.dataset.algo !== S.algo) {
+        const names = Object.keys(DATA.algos[b.dataset.algo].layouts);
+        load(b.dataset.algo, names.indexOf(S.name) >= 0 ? S.name : names[0], 0);
+      }
+    });
+    $('picker').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button');
+      if (b && b.dataset.name !== S.name) load(S.algo, b.dataset.name, 0);
+    });
+
+    $('bRestart').addEventListener('click', manual(() => go(0)));
+    $('bBack').addEventListener('click', manual(() => go(S.idx - 1)));
+    $('bStep').addEventListener('click', manual(() => go(S.idx + 1)));
+    $('bPop').addEventListener('click', manual(nextNode));
+    $('bPlay').addEventListener('click', play);
+    $('scrub').addEventListener('input', (ev) => { halt(); go(+ev.target.value); });
+    $('speed').addEventListener('input', (ev) => { S.speed = +ev.target.value; $('speedOut').textContent = SPEED_LABEL[S.speed]; });
+    $('speedOut').textContent = SPEED_LABEL[S.speed];
+
+    const ul = $('stack');
+    ul.addEventListener('mouseover', (ev) => { const li = ev.target.closest('.srow'); setHover(li ? +li.dataset.eid : -1); });
+    ul.addEventListener('mouseleave', () => setHover(-1));
+    ul.addEventListener('focusin', (ev) => { const li = ev.target.closest('.srow'); setHover(li ? +li.dataset.eid : -1); });
+    ul.addEventListener('focusout', () => setHover(-1));
+
+    document.addEventListener('keydown', (ev) => {
+      if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+      const t = ev.target, tag = t && t.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (ev.key === 'ArrowRight') { halt(); go(S.idx + 1); ev.preventDefault(); }
+      else if (ev.key === 'ArrowLeft') { halt(); go(S.idx - 1); ev.preventDefault(); }
+      else if (ev.key === ' ' && tag !== 'BUTTON') { play(); ev.preventDefault(); }
+      else if (ev.key === 'n' || ev.key === 'N') { halt(); nextNode(); }
+      else if (ev.key === 'r' || ev.key === 'R') { halt(); go(0); }
+    });
+
+    if (window.ResizeObserver) new ResizeObserver(() => { if (L) { fit(); if (S.vw) draw(S.vw); } }).observe($('bw'));
+    const themeRedraw = () => { if (S.vw) draw(S.vw); };
+    new MutationObserver(themeRedraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', themeRedraw); }
+
+    const algo = INIT && DATA.algos[INIT.algo] ? INIT.algo : Object.keys(DATA.algos)[0];
+    const mazes = Object.keys(DATA.algos[algo].layouts);
+    const maze = INIT && mazes.indexOf(INIT.layout) >= 0 ? INIT.layout : mazes[0];
+    const startIdx = INIT && typeof INIT.idx === 'number' ? INIT.idx : (INIT && INIT.rest ? prepare(algo, maze).rest : 0);
+    load(algo, maze, startIdx);
+  }
+
+  init();
+})();
+</script>

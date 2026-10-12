@@ -1,0 +1,768 @@
+<title>__TITLE__</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: a "classroom": the algorithm map and question grid on the left, one question at a time on the right. */
+:root {
+  --font-display: "Silkscreen", "Courier New", monospace;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --bg: #edf0f8; --surface: #ffffff; --surface-2: #e5e9f4; --ink: #10172b; --ink-2: #444f6e; --ink-3: #5d6788; --line: #cdd4e6;
+  --accent: #2641d8; --accent-ink: #ffffff; --hl: rgba(38, 65, 216, .14);
+  --ok: #12733a; --ok-soft: rgba(18, 115, 58, .12);
+  --bad: #b3261e; --bad-soft: rgba(179, 38, 30, .12);
+  --warn: #8a5a00; --warn-soft: rgba(184, 120, 0, .16);
+  --none: #8a93b0; --none-soft: rgba(138, 147, 176, .14);
+
+  /* the arcade board is its own screen: identical in both themes */
+  --b-board: #070b1c; --b-wallfill: #0d1538; --b-wall: #3a58ff; --b-visited: rgba(255, 90, 110, .30);
+  --b-path: #ffb23e; --b-pac: #ffe14d; --b-pellet: #ffd2c8; --b-start: #9aa7d6; --b-costtint: #a47bff; --b-htint: #2fd8cf; --b-now: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5; --line: #27345f;
+    --accent: #8fa3ff; --accent-ink: #0a0f1f; --hl: rgba(143, 163, 255, .2);
+    --ok: #6fe39a; --ok-soft: rgba(111, 227, 154, .13); --bad: #ff8e9b; --bad-soft: rgba(255, 142, 155, .14);
+    --warn: #ffc766; --warn-soft: rgba(255, 199, 102, .16); --none: #7d88ad; --none-soft: rgba(125, 136, 173, .16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5; --line: #27345f;
+  --accent: #8fa3ff; --accent-ink: #0a0f1f; --hl: rgba(143, 163, 255, .2);
+  --ok: #6fe39a; --ok-soft: rgba(111, 227, 154, .13); --bad: #ff8e9b; --bad-soft: rgba(255, 142, 155, .14);
+  --warn: #ffc766; --warn-soft: rgba(255, 199, 102, .16); --none: #7d88ad; --none-soft: rgba(125, 136, 173, .16);
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); line-height: 1.5; }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+button, input { font: inherit; color: inherit; }
+.tabnum { font-variant-numeric: tabular-nums; }
+.app { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 18px; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.3rem, 1rem + 1.3vw, 1.85rem); letter-spacing: .03em; text-wrap: balance; }
+h2 { margin: 0 0 6px; font-size: 1rem; font-weight: 600; text-wrap: balance; }
+.sub { margin: 6px 0 0; max-width: 70ch; font-size: .92rem; color: var(--ink-2); }
+button:focus-visible, input:focus-visible, .qdot:focus-visible, .pchip:focus-visible, .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; min-width: 0; }
+
+.top { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-end; justify-content: space-between; }
+.scorebox { display: flex; align-items: center; gap: 14px; }
+.ring { position: relative; width: 62px; height: 62px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring b { position: absolute; inset: 0; display: grid; place-items: center; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.scorebox small { display: block; color: var(--ink-3); font-size: .74rem; }
+
+.layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* algorithm map */
+.mapnote { margin: 0 0 10px; font-size: .78rem; color: var(--ink-3); }
+.mapflow { display: flex; flex-direction: column; gap: 7px; align-items: stretch; }
+.mapgroup { border: 1px dashed var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.mapgroup > .gl { font-size: .66rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.pchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pchip { position: relative; display: flex; flex-direction: column; gap: 3px; flex: 1 1 calc(50% - 6px); min-width: 7.2rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; text-align: left; }
+.pchip:hover { background: var(--surface-2); }
+.pchip[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--hl); border-color: var(--accent); }
+.pchip .pl { font-size: .76rem; font-weight: 600; line-height: 1.25; }
+.pchip .pm { display: flex; justify-content: space-between; font-size: .68rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.pchip .bar { height: 5px; border-radius: 3px; background: var(--none-soft); overflow: hidden; }
+.pchip .bar i { display: block; height: 100%; background: var(--none); width: 0; }
+.pchip.solid { border-color: var(--ok); } .pchip.solid .bar i { background: var(--ok); }
+.pchip.okay { border-color: var(--warn); } .pchip.okay .bar i { background: var(--warn); }
+.pchip.shaky { border-color: var(--bad); } .pchip.shaky .bar i { background: var(--bad); }
+.arrowdown { text-align: center; color: var(--ink-3); font-size: .8rem; line-height: 1; }
+.legendrow { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 10px 0 0; padding: 0; list-style: none; font-size: .7rem; color: var(--ink-3); }
+.legendrow li { display: flex; align-items: center; gap: 5px; }
+.legendrow i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; border: 2px solid var(--none); }
+.legendrow i.solid { border-color: var(--ok); } .legendrow i.okay { border-color: var(--warn); } .legendrow i.shaky { border-color: var(--bad); }
+.clearfilter { margin-top: 8px; font-size: .76rem; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+
+/* question grid */
+.qgrid { display: flex; flex-wrap: wrap; gap: 6px; }
+.qdot { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: .74rem; font-weight: 600; cursor: pointer; font-variant-numeric: tabular-nums; }
+.qdot.correct { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.qdot.partial { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.qdot.wrong { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.qdot.cur { box-shadow: 0 0 0 2px var(--accent); }
+.qdot.dim { opacity: .35; }
+
+/* question card */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.qmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: .74rem; color: var(--ink-3); }
+.tag { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); font-size: .72rem; font-weight: 600; color: var(--ink-2); }
+.tag.practice { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+.stars { letter-spacing: 2px; color: var(--warn); }
+.card h3 { margin: 0; font-size: 1.12rem; text-wrap: balance; }
+.prompt { margin: 0; max-width: 78ch; }
+.prompt code, .opt code, .explain code, .fb code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.visual { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; min-width: 0; }
+.visual > * { min-width: 0; }
+.visual svg.graph { width: 100%; max-width: 520px; height: auto; }
+.cap { margin: 4px 0 0; font-size: .74rem; color: var(--ink-3); }
+.board { display: block; border-radius: 6px; background: var(--b-board); max-width: 100%; }
+
+/* answer controls */
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: 8px; align-items: start; text-align: left; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.opt:hover:not(:disabled) { background: var(--surface-2); }
+.opt .mk { width: 16px; height: 16px; margin-top: 3px; border: 2px solid var(--ink-3); border-radius: 50%; }
+.opt.multi .mk { border-radius: 4px; }
+.opt.sel { border-color: var(--accent); background: var(--hl); }
+.opt.sel .mk { background: var(--accent); box-shadow: inset 0 0 0 2px var(--surface); }
+.opt.right { border-color: var(--ok); background: var(--ok-soft); }
+.opt.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.opt:disabled { cursor: default; }
+.opts.visualopts { flex-direction: row; flex-wrap: wrap; }
+.opts.visualopts .opt { grid-template-columns: 1fr; flex: 1 1 180px; justify-items: center; }
+.opts.visualopts .opt .mk { display: none; }
+.order { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 720px) { .order { grid-template-columns: minmax(0, 1fr); } }
+.order h4 { margin: 0 0 6px; font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.order .list { display: flex; flex-direction: column; gap: 6px; min-height: 44px; padding: 6px; border: 1px dashed var(--line); border-radius: 8px; }
+.order .it { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: 6px; text-align: left; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; font-size: .88rem; }
+.order .it:hover:not(:disabled) { background: var(--surface-2); }
+.order .it .n { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.order .it.right { border-color: var(--ok); background: var(--ok-soft); }
+.order .it.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.numrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.numrow input { width: 9rem; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: 600 1rem var(--font-mono); }
+.numrow .unit { color: var(--ink-3); font-size: .86rem; }
+.picked { margin: 0; font-size: .84rem; color: var(--ink-2); min-height: 1.4em; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.btn { height: 38px; padding: 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .88rem; font-weight: 500; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.hints { display: flex; flex-direction: column; gap: 6px; }
+.hint { padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); border: 1px solid var(--warn); font-size: .86rem; }
+.fb { border-radius: 10px; padding: 12px 14px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.fb.ok { border-color: var(--ok); background: var(--ok-soft); }
+.fb.part { border-color: var(--warn); background: var(--warn-soft); }
+.fb.bad { border-color: var(--bad); background: var(--bad-soft); }
+.fb .fh { font-weight: 700; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.fb .fh small { font-weight: 500; color: var(--ink-2); }
+.fb p { margin: 0; }
+.demo { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
+.demo h4 { margin: 0; font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+/* tables, code, graphs */
+table.heap { border-collapse: collapse; font-size: .8rem; min-width: 14rem; }
+table.heap caption { caption-side: top; text-align: left; font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding-bottom: 4px; }
+table.heap th, table.heap td { padding: 4px 10px; border-bottom: 1px solid var(--line); text-align: left; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+table.heap th { font-family: var(--font-ui); font-weight: 600; color: var(--ink-3); font-size: .72rem; }
+table.heap tr.next td { background: var(--hl); font-weight: 600; }
+table.heap tr.dim td { color: var(--ink-3); }
+table.heap tr.bad td { background: var(--bad-soft); }
+table.heap tr.good td { background: var(--ok-soft); }
+.tablewrap { overflow-x: auto; max-width: 100%; }
+ol.code { list-style: none; margin: 0; padding: 8px 0; font: 400 12.5px/1.7 var(--font-mono); background: var(--surface-2); border-radius: 8px; border: 1px solid var(--line); overflow-x: auto; max-width: 100%; }
+ol.code li { display: flex; gap: 12px; padding: 0 12px 0 8px; white-space: pre; }
+ol.code .no { flex: none; width: 3ch; text-align: right; color: var(--ink-3); user-select: none; }
+ol.code li.mark { background: var(--hl); box-shadow: inset 3px 0 0 var(--accent); }
+ol.code li.rep { background: var(--bad-soft); box-shadow: inset 3px 0 0 var(--bad); }
+ol.code li.gone { text-decoration: line-through; color: var(--ink-3); background: var(--none-soft); }
+ol.code li.old { text-decoration: line-through; color: var(--ink-3); }
+.codewrap { max-width: 100%; min-width: 0; flex: 1 1 380px; }
+.picked b { font-family: var(--font-mono); }
+svg.graph text { font-family: var(--font-mono); }
+svg.graph .nd { cursor: default; }
+svg.graph.pickable .nd, svg.graph.pickable .ed { cursor: pointer; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; width: 100%; }
+@media (max-width: 720px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.pair > div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.pair h5 { margin: 0 0 4px; font-size: .78rem; font-weight: 600; }
+.pair .res { font-size: .84rem; margin-top: 6px; }
+.pair .res.ok { color: var(--ok); } .pair .res.bad { color: var(--bad); }
+.pair .res b { font-weight: 700; }
+
+/* intro and report */
+.intro { display: flex; flex-direction: column; gap: 14px; }
+.intro ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 4px; font-size: .92rem; }
+.bigscore { font-family: var(--font-display); font-size: clamp(1.8rem, 1rem + 3vw, 2.8rem); font-weight: 700; line-height: 1; }
+.report table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+.report th, .report td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.report th { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; border: 1px solid; }
+.pill.solid { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.pill.okay { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.pill.shaky { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+.pill.none { color: var(--none); border-color: var(--none); background: var(--none-soft); }
+.foot { margin: 0; font-size: .74rem; color: var(--ink-3); max-width: 100ch; }
+#err { margin: 0; padding: 8px 12px; border-radius: 6px; background: #b3261e; color: #fff; font: 12px var(--font-mono); white-space: pre-wrap; }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1 id="h1"></h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="scorebox" id="scorebox"></div>
+  </header>
+  <div class="layout">
+    <aside class="side">
+      <section class="panel">
+        <h2 id="mapTitle">Algorithm map</h2>
+        <p class="mapnote" id="mapNote">Every box is a part of the algorithm. It fills in as you are tested on it. Click a box to see only its questions.</p>
+        <div id="map"></div>
+        <ul class="legendrow"><li><i></i>not tested yet</li><li><i class="shaky"></i>shaky</li><li><i class="okay"></i>okay</li><li><i class="solid"></i>solid</li></ul>
+        <button type="button" class="clearfilter" id="clearFilter" hidden>Show all questions</button>
+      </section>
+      <section class="panel">
+        <h2>Questions</h2>
+        <div class="qgrid" id="qgrid"></div>
+      </section>
+    </aside>
+    <main id="main" aria-live="polite"></main>
+  </div>
+  <p class="foot" id="foot"></p>
+  <pre id="err" hidden></pre>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const DATA = /*__DATA__*/null;
+
+  const $ = (id) => document.getElementById(id);
+  const errBox = $('err');
+  window.addEventListener('error', (ev) => { errBox.hidden = false; errBox.textContent += (ev.message || 'Script error') + ' (line ' + ev.lineno + ')\n'; });
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fmt = (v) => (typeof v !== 'number' ? String(v) : Number.isInteger(v) ? String(v) : String(+v.toFixed(3)));
+  const cssv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // ------------------------------------------------------------ random numbers (seeded, so a question can be re-rolled)
+  function rng(seed) {
+    let a = seed >>> 0;
+    const r = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    r.int = (lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
+    r.pick = (arr) => arr[Math.floor(r() * arr.length)];
+    r.shuffle = (arr) => { const a2 = arr.slice(); for (let i = a2.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a2[i]; a2[i] = a2[j]; a2[j] = t; } return a2; };
+    return r;
+  }
+  const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+  // ------------------------------------------------------------ graphs: a reference implementation of the algorithm
+  // g = { pos: {id: [x, y]}, edges: [{u, v, w}], start, goal, h: {id: number}, size: [W, H] }
+  function mkGraph(tpl, weights, h) {
+    return { pos: tpl.pos, size: tpl.size || [440, 260], edges: tpl.edges.map((e, i) => ({ u: e[0], v: e[1], w: weights[i] })), start: tpl.start || 'S', goal: tpl.goal || 'G', h: h || null };
+  }
+  const out = (g, u) => g.edges.filter((e) => e.u === u);
+
+  // best-first search. kind: 'ucs' | 'astar' | 'greedy'. Flags switch on the deliberate bugs the questions ask about.
+  function bestFirst(g, o) {
+    o = o || {};
+    const kind = o.kind || 'ucs', cap = o.maxPops || 400;
+    const hv = (n) => (g.h && g.h[n] !== undefined ? g.h[n] : 0);
+    const pri = (gc, n, w, par) => (kind === 'greedy' ? hv(n) : kind === 'astar' ? gc + (o.hOfParent && par ? hv(par) : hv(n)) : o.ignoreCost ? w : gc);
+    const better = (a, b) => a.pri < b.pri || (a.pri === b.pri && (o.lifo ? a.seq > b.seq : a.seq < b.seq));
+    const heap = [], steps = [], visited = new Set(), queued = new Set([g.start]), order = [];
+    let seq = 0, pops = 0, stale = 0, ties = false;
+    const snap = () => heap.slice().sort((a, b) => (better(a, b) ? -1 : 1)).map((e) => Object.assign({}, e));
+    const push = (e) => { e.seq = seq++; heap.push(e); };
+    push({ s: g.start, g: 0, path: [g.start], pri: pri(0, g.start, 0), h: hv(g.start) });
+    while (heap.length && pops < cap) {
+      let bi = 0;
+      for (let i = 1; i < heap.length; i++) if (better(heap[i], heap[bi])) bi = i;
+      for (let i = 0; i < heap.length; i++) if (i !== bi && heap[i].pri === heap[bi].pri) ties = true;
+      const before = snap();
+      const e = heap.splice(bi, 1)[0]; pops++;
+      const st = { entry: e, before, pushes: [], stale: false, goal: false, expanded: false };
+      steps.push(st);
+      if (!o.noVisited && visited.has(e.s)) { st.stale = true; stale++; st.after = snap(); st.visited = [...visited]; continue; }
+      if (e.s === g.goal) { st.goal = true; st.after = snap(); st.visited = [...visited]; return { found: true, path: e.path, cost: e.g, expansions: order.length, pops, stale, order, steps, ties, capped: false }; }
+      if (!o.noVisited) visited.add(e.s);
+      order.push(e.s); st.expanded = true;
+      for (const ed of out(g, e.s)) {
+        const n = ed.v;
+        if (!o.noVisited && visited.has(n)) { st.pushes.push({ s: n, skipped: 'visited' }); continue; }
+        if (o.skipIfQueued && queued.has(n)) { st.pushes.push({ s: n, skipped: 'queued' }); continue; }
+        const ne = { s: n, g: e.g + ed.w, path: e.path.concat(n), h: hv(n) };
+        ne.pri = pri(ne.g, n, ed.w, e.s);
+        if (o.goalOnPush && n === g.goal) { st.pushes.push(ne); st.after = snap(); st.visited = [...visited]; return { found: true, path: ne.path, cost: ne.g, expansions: order.length, pops, stale, order, steps, ties, capped: false }; }
+        push(ne); queued.add(n); st.pushes.push(ne);
+      }
+      st.after = snap(); st.visited = [...visited];
+    }
+    return { found: false, path: [], cost: null, expansions: order.length, pops, stale, order, steps, ties, capped: pops >= cap };
+  }
+
+  // exact cost-to-goal for every node (Bellman-Ford style, fine for small graphs; assumes no negative cycles)
+  function trueDist(g) {
+    const d = {}; Object.keys(g.pos).forEach((n) => { d[n] = Infinity; }); d[g.goal] = 0;
+    for (let k = 0; k < 40; k++) g.edges.forEach((e) => { if (d[e.v] + e.w < d[e.u]) d[e.u] = d[e.v] + e.w; });
+    return d;
+  }
+  // measured heuristic properties
+  function checkH(g) {
+    const d = trueDist(g), inadm = [], incons = [];
+    Object.keys(g.pos).forEach((n) => { if (g.h[n] > d[n] + 1e-9) inadm.push(n); });
+    g.edges.forEach((e) => { if (g.h[e.u] > e.w + g.h[e.v] + 1e-9) incons.push(e.u + '>' + e.v); });
+    return { admissible: inadm.length === 0, consistent: incons.length === 0, inadm, incons, d };
+  }
+  // an h that is consistent and admissible: a fraction of the exact distance
+  function niceH(g, alpha) { const d = trueDist(g), h = {}; Object.keys(g.pos).forEach((n) => { h[n] = d[n] === Infinity ? 0 : alpha * d[n]; }); return h; }
+  const pathStr = (p) => p.join(' → ');
+
+  // ------------------------------------------------------------ drawing: graphs, heaps, code, grids
+  function gSVG(g, o) {
+    o = o || {};
+    const [W, H] = g.size, R = 19, has = {};
+    g.edges.forEach((e) => { has[e.u + '>' + e.v] = true; });
+    const pe = new Set(); if (o.path) for (let i = 0; i + 1 < o.path.length; i++) pe.add(o.path[i] + '>' + o.path[i + 1]);
+    const pe2 = new Set(); if (o.path2) for (let i = 0; i + 1 < o.path2.length; i++) pe2.add(o.path2[i] + '>' + o.path2[i + 1]);
+    let s = '<svg class="graph' + (o.pick ? ' pickable' : '') + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(o.label || 'Graph') + '"><defs>' +
+      ['n', 'g', 'r', 'a'].map((k) => '<marker id="ah' + k + (o.uid || '') + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill: ' +
+        ({ n: 'var(--ink-3)', g: 'var(--ok)', r: 'var(--bad)', a: 'var(--accent)' })[k] + '"/></marker>').join('') + '</defs>';
+    g.edges.forEach((e) => {
+      const a = g.pos[e.u], b = g.pos[e.v], id = e.u + '>' + e.v;
+      let dx = b[0] - a[0], dy = b[1] - a[1]; const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+      const off = has[e.v + '>' + e.u] ? 7 : 0, ox = -dy * off, oy = dx * off;
+      const x1 = a[0] + dx * R + ox, y1 = a[1] + dy * R + oy, x2 = b[0] - dx * (R + 3) + ox, y2 = b[1] - dy * (R + 3) + oy;
+      let k = 'n', sw = 2, dash = '';
+      if (pe.has(id)) { k = 'g'; sw = 4; }
+      if (pe2.has(id)) { k = 'r'; sw = 3; dash = 'stroke-dasharray:6 4;'; }
+      if (o.edgeMarks && o.edgeMarks[id]) { k = o.edgeMarks[id] === 'ok' ? 'g' : 'r'; sw = 4; }
+      if (o.selEdges && o.selEdges.has(id)) { k = 'a'; sw = 4; }
+      const col = ({ n: 'var(--ink-3)', g: 'var(--ok)', r: 'var(--bad)', a: 'var(--accent)' })[k];
+      s += '<g class="ed" data-e="' + id + '"><line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" style="stroke:transparent;stroke-width:14"/>' +
+        '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" marker-end="url(#ah' + k + (o.uid || '') + ')" style="stroke:' + col + ';stroke-width:' + sw + ';' + dash + '"/>';
+      const mx = (x1 + x2) / 2 + ox * 1.6, my = (y1 + y2) / 2 + oy * 1.6, lab = fmt(e.w);
+      s += '<rect x="' + (mx - 6 - 4.2 * lab.length) + '" y="' + (my - 10) + '" width="' + (12 + 8.4 * lab.length) + '" height="20" rx="4" style="fill:var(--surface);stroke:var(--line)"/>' +
+        '<text x="' + mx + '" y="' + (my + 4.5) + '" text-anchor="middle" style="fill:var(--ink);font-size:12.5px;font-weight:600">' + lab + '</text></g>';
+    });
+    Object.keys(g.pos).forEach((n) => {
+      const p = g.pos[n];
+      let fill = 'var(--surface-2)', stroke = 'var(--ink-3)', sw = 2, text = 'var(--ink)';
+      if (o.visited && o.visited.has(n)) { fill = 'var(--ok-soft)'; stroke = 'var(--ok)'; }
+      if (o.heapNodes && o.heapNodes.has(n)) { stroke = 'var(--accent)'; sw = 3.5; }
+      if (o.current === n) { fill = 'var(--hl)'; stroke = 'var(--accent)'; sw = 4; }
+      if (o.pathNodes && o.pathNodes.has(n)) { fill = 'var(--ok-soft)'; stroke = 'var(--ok)'; sw = 3; }
+      if (o.selNodes && o.selNodes.has(n)) { fill = 'var(--hl)'; stroke = 'var(--accent)'; sw = 4; }
+      if (o.marks && o.marks[n]) { stroke = o.marks[n] === 'ok' ? 'var(--ok)' : 'var(--bad)'; fill = o.marks[n] === 'ok' ? 'var(--ok-soft)' : 'var(--bad-soft)'; sw = 4; }
+      s += '<g class="nd" data-n="' + n + '"><circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + R + '" style="fill:' + fill + ';stroke:' + stroke + ';stroke-width:' + sw + '"/>' +
+        '<text x="' + p[0] + '" y="' + (p[1] + 5) + '" text-anchor="middle" style="fill:' + text + ';font-size:14px;font-weight:700">' + n + '</text>';
+      if (n === g.start) s += '<text x="' + p[0] + '" y="' + (p[1] - R - 5) + '" text-anchor="middle" style="fill:var(--ink-3);font-size:10px">start</text>';
+      if (n === g.goal) s += '<circle cx="' + (p[0] + R + 5) + '" cy="' + (p[1] - R + 2) + '" r="4.5" style="fill:var(--b-pellet);stroke:var(--b-board);stroke-width:1.5"/>';
+      const an = o.annot && o.annot[n];
+      if (an) { const up = p[1] < H * 0.38;      // labels of upper-row nodes go above them so they stay clear of the edges below
+        an.forEach((t, i) => { const y = up ? p[1] - R - 6 - (an.length - 1 - i) * 12 : p[1] + R + 13 + i * 12; s += '<text x="' + p[0] + '" y="' + y + '" text-anchor="middle" style="fill:var(--ink-2);font-size:10.5px;font-weight:500">' + esc(t) + '</text>'; }); }
+      s += '</g>';
+    });
+    return s + '</svg>';
+  }
+
+  // heap table. entries: [{s, g, h, pri, path}]; cols: which columns to show
+  function heapHTML(entries, o) {
+    o = o || {};
+    const cols = o.cols || ['g', 'pri', 'path'];
+    const rows = entries.map((e, i) => {
+      const cls = (i === 0 && !o.noNext ? 'next ' : '') + (o.dimIdx && o.dimIdx.has(i) ? 'dim ' : '') + ((o.badIdx && o.badIdx.has(i)) ? 'bad ' : '') + ((o.goodIdx && o.goodIdx.has(i)) ? 'good' : '');
+      return '<tr class="' + cls + '"><td>' + esc(e.s) + '</td>' + cols.map((c) => '<td>' + (c === 'path' ? esc(pathStr(e.path)) : c === 'h' ? fmt(e.h) : c === 'pri' ? fmt(e.pri) : c === 'g' ? fmt(e.g) : c === 'seq' ? (e.seq + 1) : '') + '</td>').join('') + '</tr>';
+    }).join('');
+    const head = { g: 'g (cost)', h: 'h', pri: o.priLabel || 'priority', path: 'path', seq: 'pushed #' };
+    return '<div class="tablewrap"><table class="heap"><caption>' + esc(o.caption || 'Heap, next to pop first') + '</caption><thead><tr><th>state</th>' + cols.map((c) => '<th>' + head[c] + '</th>').join('') + '</tr></thead><tbody>' +
+      (rows || '<tr><td colspan="' + (cols.length + 1) + '">(empty)</td></tr>') + '</tbody></table></div>';
+  }
+
+  // the student's real code. o.mark: roles to highlight; o.replace: {role: newText}; o.remove: roles shown struck out
+  function codeHTML(o) {
+    o = o || {};
+    const L = DATA.code.lines, mark = new Set(o.mark || []), rep = o.replace || {}, rem = new Set(o.remove || []);
+    return '<div class="codewrap"><ol class="code">' + L.map((l) => {
+      let cls = '', text = esc(l.text);
+      if (mark.has(l.role)) cls = 'mark';
+      if (rem.has(l.role)) cls = 'gone';
+      if (rep[l.role] !== undefined) { cls = 'rep'; text = esc(rep[l.role]) + '   <span style="color:var(--ink-3)">← changed (was: ' + esc(l.text.trim()) + ')</span>'; }
+      return '<li class="' + cls + '"><span class="no">' + l.ln + '</span><span>' + text + '</span></li>';
+    }).join('') + '</ol></div>';
+  }
+  const lineOf = (role) => { const l = DATA.code.lines.find((x) => x.role === role); return l ? l.ln : '?'; };
+  const textOf = (role) => { const l = DATA.code.lines.find((x) => x.role === role); return l ? l.text.trim() : ''; };
+
+  // ------------------------------------------------------------ grids (mazes) for the exploration-shape questions
+  function parseMaze(rows) {
+    const H = rows.length, W = rows[0].length, wall = [], cost = [];
+    for (let x = 0; x < W; x++) { wall.push(new Array(H).fill(false)); cost.push(new Array(H).fill(1)); }
+    let start = [1, 1], goal = [1, 1];
+    rows.forEach((row, r) => { const y = H - 1 - r; for (let x = 0; x < W; x++) { const c = row[x]; if (c === '%') { wall[x][y] = true; cost[x][y] = null; } if (c === 'P') start = [x, y]; if (c === '.') goal = [x, y]; } });
+    return { W, H, wall, cost, start, goal };
+  }
+  function openField(W, H, walls) {
+    const g = parseMaze(Array.from({ length: H }, (_, r) => Array.from({ length: W }, (_, x) => (x === 0 || r === 0 || x === W - 1 || r === H - 1 ? '%' : ' ')).join('')));
+    (walls || []).forEach((w) => { for (let y = w.y0; y <= w.y1; y++) { g.wall[w.x][y] = true; g.cost[w.x][y] = null; } });
+    return g;
+  }
+  const DIRS = [[0, 1, 'N'], [0, -1, 'S'], [1, 0, 'E'], [-1, 0, 'W']];
+  // kind: 'bfs' | 'dfs' | 'ucs' | 'astar' | 'greedy'; hmul scales the Manhattan heuristic (1 = admissible on unit cost)
+  function gridSearch(gr, kind, o) {
+    o = o || {};
+    const W = gr.W, mc = o.minCost || 1, hfun = o.h || ((x, y) => mc * (Math.abs(x - gr.goal[0]) + Math.abs(y - gr.goal[1])));
+    const heap = [], visited = new Uint8Array(W * gr.H), order = []; let seq = 0;
+    const key = (e) => (kind === 'dfs' ? -e.seq : kind === 'bfs' ? e.seq : kind === 'ucs' ? e.g : kind === 'greedy' ? hfun(e.x, e.y) : e.g + hfun(e.x, e.y));
+    const better = (a, b) => { const ka = key(a), kb = key(b); return ka < kb || (ka === kb && a.seq < b.seq); };
+    heap.push({ x: gr.start[0], y: gr.start[1], g: 0, path: '', seq: seq++ });
+    while (heap.length) {
+      let bi = 0; for (let i = 1; i < heap.length; i++) if (better(heap[i], heap[bi])) bi = i;
+      const e = heap.splice(bi, 1)[0], id = e.x + e.y * W;
+      if (visited[id]) continue;
+      if (e.x === gr.goal[0] && e.y === gr.goal[1]) return { found: true, order, path: e.path, cost: e.g };
+      visited[id] = 1; order.push(id);
+      for (const d of DIRS) {
+        const nx = e.x + d[0], ny = e.y + d[1];
+        if (gr.wall[nx][ny] || visited[nx + ny * W]) continue;
+        heap.push({ x: nx, y: ny, g: e.g + gr.cost[nx][ny], path: e.path + d[2], seq: seq++ });
+      }
+    }
+    return { found: false, order, path: '', cost: null };
+  }
+  function drawGrid(cv, gr, o) {
+    const cs = o.cs || 12, W = gr.W, H = gr.H, dpr = window.devicePixelRatio || 1;
+    cv.style.width = W * cs + 'px'; cv.style.height = H * cs + 'px'; cv.width = Math.round(W * cs * dpr); cv.height = Math.round(H * cs * dpr);
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const X = (x) => x * cs, Y = (y) => (H - 1 - y) * cs, cx = (x) => X(x) + cs / 2, cy = (y) => Y(y) + cs / 2;
+    ctx.fillStyle = cssv('--b-board'); ctx.fillRect(0, 0, W * cs, H * cs);
+    if (o.tint) {
+      let lo = Infinity, hi = -Infinity;
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const v = gr.cost[x][y]; if (v === null) continue; const l = Math.log10(v); lo = Math.min(lo, l); hi = Math.max(hi, l); }
+      if (hi > lo) { ctx.fillStyle = cssv('--b-costtint'); for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const v = gr.cost[x][y]; if (v === null) continue; ctx.globalAlpha = 0.04 + 0.4 * (Math.log10(v) - lo) / (hi - lo); ctx.fillRect(X(x), Y(y), cs, cs); } ctx.globalAlpha = 1; }
+    }
+    if (o.order) { ctx.fillStyle = cssv('--b-visited'); const n = o.upto === undefined ? o.order.length : o.upto; for (let i = 0; i < n && i < o.order.length; i++) { const id = o.order[i], x = id % W, y = (id - x) / W; ctx.fillRect(X(x) + 1, Y(y) + 1, cs - 2, cs - 2); } }
+    if (o.heat) { ctx.fillStyle = 'rgb(255,90,110)'; Object.keys(o.heat).forEach((k) => { const [hx, hy] = k.split(',').map(Number); ctx.globalAlpha = Math.min(1, 0.14 + 0.78 * o.heat[k]); ctx.fillRect(X(hx) + 1, Y(hy) + 1, cs - 2, cs - 2); }); ctx.globalAlpha = 1; }
+    const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !gr.wall[x][y];
+    ctx.fillStyle = cssv('--b-wallfill'); ctx.strokeStyle = cssv('--b-wall'); ctx.lineWidth = Math.max(1, cs * 0.1); ctx.lineCap = 'round'; ctx.beginPath();
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+      if (!gr.wall[x][y]) continue; ctx.fillRect(X(x), Y(y), cs, cs);
+      if (open(x, y + 1)) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x) + cs, Y(y)); } if (open(x, y - 1)) { ctx.moveTo(X(x), Y(y) + cs); ctx.lineTo(X(x) + cs, Y(y) + cs); }
+      if (open(x - 1, y)) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x), Y(y) + cs); } if (open(x + 1, y)) { ctx.moveTo(X(x) + cs, Y(y)); ctx.lineTo(X(x) + cs, Y(y) + cs); }
+    }
+    ctx.stroke();
+    if (o.path) { ctx.strokeStyle = cssv('--b-path'); ctx.lineWidth = Math.max(1.5, cs * 0.16); ctx.lineJoin = 'round'; ctx.beginPath(); let x = gr.start[0], y = gr.start[1]; ctx.moveTo(cx(x), cy(y)); for (const a of o.path) { const d = DIRS.find((q) => q[2] === a); x += d[0]; y += d[1]; ctx.lineTo(cx(x), cy(y)); } ctx.stroke(); }
+    (o.lines || []).forEach((ln) => { ctx.strokeStyle = ln.color || cssv('--b-htint'); ctx.lineWidth = Math.max(1.5, cs * (ln.w || 0.14)); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.setLineDash(ln.dash ? [cs * 0.32, cs * 0.26] : []); ctx.beginPath(); ln.pts.forEach((p, i) => { if (i) ctx.lineTo(cx(p[0]), cy(p[1])); else ctx.moveTo(cx(p[0]), cy(p[1])); }); ctx.stroke(); ctx.setLineDash([]); });
+    if (o.marks) {                                   // coloured squares on cells (used by click-on-the-maze questions)
+      Object.keys(o.marks).forEach((k) => {
+        const [mx, my] = k.split(',').map(Number), kind = o.marks[k];
+        if (kind === 'sel') { ctx.strokeStyle = cssv('--b-now'); ctx.lineWidth = Math.max(2, cs * 0.14); ctx.strokeRect(X(mx) + 1.5, Y(my) + 1.5, cs - 3, cs - 3); }
+        else if (kind === 'miss') { ctx.strokeStyle = 'rgba(90,226,138,.98)'; ctx.lineWidth = Math.max(2, cs * 0.12); ctx.setLineDash([cs * 0.2, cs * 0.14]); ctx.strokeRect(X(mx) + 1.5, Y(my) + 1.5, cs - 3, cs - 3); ctx.setLineDash([]); }
+        else { ctx.fillStyle = kind === 'ok' ? 'rgba(90,226,138,.62)' : 'rgba(255,84,100,.62)'; ctx.fillRect(X(mx) + 1, Y(my) + 1, cs - 2, cs - 2); }
+      });
+    }
+    if (!o.hidePellet) { ctx.fillStyle = cssv('--b-pellet'); ctx.beginPath(); ctx.arc(cx(gr.goal[0]), cy(gr.goal[1]), Math.max(2, cs * 0.22), 0, Math.PI * 2); ctx.fill(); }
+    (o.dots || []).forEach((d) => {                  // markers such as corners: filled when still to visit, hollow when visited
+      ctx.beginPath(); ctx.arc(cx(d.x), cy(d.y), Math.max(2.5, cs * (d.r || 0.3)), 0, Math.PI * 2);
+      if (d.hollow) { ctx.strokeStyle = cssv('--b-start'); ctx.lineWidth = Math.max(1.5, cs * 0.08); ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]); } else { ctx.fillStyle = d.fill || cssv('--b-pellet'); ctx.fill(); }
+    });
+    const pac = o.pac === undefined ? gr.start : o.pac;
+    if (pac) { ctx.fillStyle = cssv('--b-pac'); ctx.beginPath(); ctx.moveTo(cx(pac[0]), cy(pac[1])); ctx.arc(cx(pac[0]), cy(pac[1]), cs * 0.42, 0.62, Math.PI * 2 - 0.62); ctx.closePath(); ctx.fill(); }
+    (o.labels || []).forEach((l) => {
+      if (l.corner) { const w = Math.max(10, cs * 0.42); ctx.fillStyle = 'rgba(16,23,43,.92)'; ctx.fillRect(X(l.x), Y(l.y), w, w); ctx.fillStyle = '#6fe39a'; ctx.font = '700 ' + Math.max(8, Math.round(cs * 0.34)) + 'px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(l.text, X(l.x) + w / 2, Y(l.y) + w / 2 + 0.5); return; }
+      ctx.fillStyle = '#10172b'; ctx.font = '700 ' + Math.max(9, Math.round(cs * 0.5)) + 'px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(l.text, cx(l.x), cy(l.y) + 0.5); });
+  }
+  function canvasHTML(id) { return '<canvas class="board" id="' + id + '"></canvas>'; }
+
+  const H = { rng, esc, fmt, mkGraph, bestFirst, trueDist, checkH, niceH, pathStr, gSVG, heapHTML, codeHTML, lineOf, textOf, parseMaze, openField, gridSearch, drawGrid, canvasHTML, out, DATA, hash };
+  const BANK = (function (H) { /*__BANK__*/ })(H);
+
+  // ------------------------------------------------------------ session state and persistence
+  const KEY = 'eval:' + BANK.algo + ':v1';
+  const S = { view: 'intro', idx: 0, filter: null, seed: 1, results: {}, cur: null, saved: false };
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ seed: S.seed, results: S.results })); } catch (e) { /* storage may be unavailable */ } }
+  function load() {
+    try { const t = JSON.parse(localStorage.getItem(KEY) || 'null'); if (t && t.results) { S.seed = t.seed || 1; S.results = t.results; S.saved = Object.keys(t.results).length > 0; } else S.seed = 1 + Math.floor(Math.random() * 1e6); } catch (e) { S.seed = 1 + Math.floor(Math.random() * 1e6); }
+  }
+  const Q = BANK.questions, PARTS = BANK.parts, partById = {}; PARTS.forEach((p) => { partById[p.id] = p; });
+
+  function genSpec(q, variant) {
+    const r = rng(hash(q.id + ':' + S.seed + ':' + variant));
+    const spec = q.gen(r, H);
+    spec.type = spec.type || q.type;
+    return spec;
+  }
+
+  // ------------------------------------------------------------ mastery
+  function mastery() {
+    const m = {}; PARTS.forEach((p) => { m[p.id] = { got: 0, max: 0, n: 0, total: 0 }; });
+    Q.forEach((q) => {
+      const w = 1 / q.parts.length, r = S.results[q.id];
+      q.parts.forEach((pid) => { if (!m[pid]) return; m[pid].total++; if (r && r.done) { m[pid].max += w; m[pid].got += w * r.score; m[pid].n++; } });
+    });
+    PARTS.forEach((p) => { const x = m[p.id]; x.pct = x.max > 0 ? x.got / x.max : null; x.cls = x.pct === null ? 'none' : x.pct >= 0.8 ? 'solid' : x.pct >= 0.5 ? 'okay' : 'shaky'; });
+    return m;
+  }
+  function overall() { let got = 0, done = 0; Q.forEach((q) => { const r = S.results[q.id]; if (r && r.done) { got += r.score; done++; } }); return { got, done, total: Q.length, pct: done ? got / done : null }; }
+
+  function renderScore() {
+    const o = overall(), pct = o.pct === null ? 0 : o.pct, c = 2 * Math.PI * 26;
+    $('scorebox').innerHTML = '<div class="ring"><svg viewBox="0 0 62 62"><circle cx="31" cy="31" r="26" fill="none" style="stroke:var(--surface-2)" stroke-width="7"/><circle cx="31" cy="31" r="26" fill="none" style="stroke:var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (c * pct) + ' ' + c + '"/></svg><b>' + (o.pct === null ? '–' : Math.round(pct * 100) + '%') + '</b></div>' +
+      '<div><b>' + o.done + ' of ' + o.total + ' answered</b><small>score so far: ' + fmt(Math.round(o.got * 100) / 100) + ' points</small>' + (o.done ? '<button class="btn" id="finishBtn" type="button" style="height:30px;margin-top:6px;font-size:.78rem">Finish and see my report</button>' : '') + '</div>';
+    const fb = $('finishBtn'); if (fb) fb.addEventListener('click', () => { S.view = 'report'; render(); });
+  }
+
+  function renderMap() {
+    const m = mastery(), groups = BANK.groups;
+    const chip = (p) => { const x = m[p.id], pct = x.pct === null ? '' : Math.round(x.pct * 100) + '%';
+      return '<button type="button" class="pchip ' + x.cls + '" data-p="' + p.id + '" aria-pressed="' + (S.filter === p.id) + '" title="' + esc(p.review || '') + '"><span class="pl">' + esc(p.label) + '</span><span class="bar"><i style="width:' + (x.pct === null ? 0 : Math.round(x.pct * 100)) + '%"></i></span><span class="pm"><span>' + x.n + ' of ' + x.total + '</span><span>' + pct + '</span></span></button>'; };
+    $('map').innerHTML = '<div class="mapflow">' + groups.map((gr, i) => '<div class="mapgroup"><span class="gl">' + esc(gr.label) + '</span><div class="pchips">' + PARTS.filter((p) => p.group === gr.id).map(chip).join('') + '</div></div>' + (i < groups.length - 2 && gr.arrow ? '<div class="arrowdown">↓</div>' : '')).join('') + '</div>';
+    $('map').querySelectorAll('.pchip').forEach((b) => b.addEventListener('click', () => { S.filter = S.filter === b.dataset.p ? null : b.dataset.p; if (S.view === 'intro' || S.view === 'report') S.view = 'question'; const first = Q.findIndex((q) => (!S.filter || q.parts.indexOf(S.filter) >= 0) && !(S.results[q.id] && S.results[q.id].done)); const any = Q.findIndex((q) => !S.filter || q.parts.indexOf(S.filter) >= 0); if (S.filter) openQuestion(first >= 0 ? first : any); else render(); }));
+    $('clearFilter').hidden = !S.filter;
+  }
+
+  function renderGrid() {
+    $('qgrid').innerHTML = Q.map((q, i) => {
+      const r = S.results[q.id], cls = r && r.done ? (r.score >= 0.999 ? 'correct' : r.score > 0 ? 'partial' : 'wrong') : '';
+      const dim = S.filter && q.parts.indexOf(S.filter) < 0;
+      return '<button type="button" class="qdot ' + cls + (S.view === 'question' && S.idx === i ? ' cur' : '') + (dim ? ' dim' : '') + '" data-i="' + i + '" title="' + esc(q.title) + '">' + (i + 1) + '</button>';
+    }).join('');
+    $('qgrid').querySelectorAll('.qdot').forEach((b) => b.addEventListener('click', () => openQuestion(+b.dataset.i)));
+  }
+
+  // ------------------------------------------------------------ question screen
+  function openQuestion(i, practice) {
+    S.view = 'question'; S.idx = Math.max(0, Math.min(Q.length - 1, i));
+    const q = Q[S.idx], r = S.results[q.id];
+    const prevVariant = S.cur && S.cur.q === q ? S.cur.variant : 0;
+    const variant = practice ? prevVariant + 1 : 0;
+    S.cur = { q, variant, practice: !!practice, review: !practice && !!(r && r.done), spec: null, checked: false, hints: 0, resp: null, opts: null, result: null };
+    S.cur.spec = genSpec(q, variant);
+    if (S.cur.review) S.cur.result = { review: true };
+    prepareResponse();
+    render();
+  }
+
+  function prepareResponse() {
+    const c = S.cur, sp = c.spec, r = rng(hash(c.q.id + ':order:' + S.seed + ':' + c.variant));
+    if (sp.type === 'mc' || sp.type === 'multi') { c.opts = r.shuffle(sp.options.map((o, i) => Object.assign({ idx: i }, o))); if (sp.fixedOrder) c.opts = sp.options.map((o, i) => Object.assign({ idx: i }, o)); c.resp = new Set(); }
+    if (sp.type === 'order') { c.pool = r.shuffle(sp.items.map((_, i) => i)); c.placed = []; }
+    if (sp.type === 'nodes' || sp.type === 'cells') c.resp = [];
+    if (sp.type === 'numeric') c.resp = '';
+  }
+
+  const stars = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+
+  function renderQuestion() {
+    const c = S.cur, q = c.q, sp = c.spec, i = S.idx, done = c.review;
+    let h = '<article class="card"><div class="qmeta"><span class="tag">Question ' + (i + 1) + ' of ' + Q.length + '</span>' + q.parts.map((p) => '<span class="tag">' + esc(partById[p] ? partById[p].label : p) + '</span>').join('') +
+      '<span class="stars" title="difficulty">' + stars(q.level || 1) + '</span>' + (c.practice ? '<span class="tag practice">Practice variation (not scored)</span>' : '') + '</div>' +
+      '<h3>' + esc(q.title) + '</h3><p class="prompt">' + sp.prompt + '</p><div class="visual" id="visual"></div><div id="answer"></div><div id="hintbox" class="hints"></div><div class="actions" id="actions"></div><div id="feedback"></div><div id="demo"></div></article>';
+    $('main').innerHTML = h;
+    if (sp.visual) sp.visual($('visual'), H, c);
+    renderAnswer(); renderActions();
+    if (done) { showResult(S.results[q.id].last); }
+  }
+
+  function renderAnswer() {
+    const c = S.cur, sp = c.spec, el = $('answer'), locked = c.checked || c.review;
+    if (sp.type === 'mc' || sp.type === 'multi') {
+      el.innerHTML = '<div class="opts' + (sp.visualOptions ? ' visualopts' : '') + '" role="' + (sp.type === 'mc' ? 'radiogroup' : 'group') + '">' + c.opts.map((o, k) =>
+        '<button type="button" class="opt ' + (sp.type === 'multi' ? 'multi ' : '') + (c.resp.has(o.idx) ? 'sel ' : '') + (c.result ? (o.ok ? 'right ' : c.resp.has(o.idx) ? 'wrong ' : '') : '') + '" data-k="' + k + '"' + (locked ? ' disabled' : '') + '><span class="mk"></span><span>' + o.html + '</span></button>').join('') + '</div>';
+      if (sp.visualOptions) c.opts.forEach((o, k) => { if (o.draw) { const cv = el.querySelectorAll('.opt')[k].querySelector('canvas'); if (cv) o.draw(cv, H); } });
+      el.querySelectorAll('.opt').forEach((b) => b.addEventListener('click', () => {
+        if (locked) return; const o = c.opts[+b.dataset.k];
+        if (sp.type === 'mc') c.resp = new Set([o.idx]); else if (c.resp.has(o.idx)) c.resp.delete(o.idx); else c.resp.add(o.idx);
+        renderAnswer(); renderActions();
+      }));
+    } else if (sp.type === 'order') {
+      const placed = c.placed, pool = c.pool.filter((k) => placed.indexOf(k) < 0), res = c.result;
+      el.innerHTML = '<div class="order"><div><h4>Steps (click to place)</h4><div class="list" id="pool">' + pool.map((k) => '<button type="button" class="it" data-k="' + k + '"' + (locked ? ' disabled' : '') + '><span class="n">+</span><span>' + sp.items[k] + '</span></button>').join('') + '</div></div>' +
+        '<div><h4>Your order (click to remove)</h4><div class="list" id="placed">' + placed.map((k, pos) => '<button type="button" class="it ' + (res ? (k === pos ? 'right' : 'wrong') : '') + '" data-k="' + k + '"' + (locked ? ' disabled' : '') + '><span class="n">' + (pos + 1) + '</span><span>' + sp.items[k] + '</span></button>').join('') + '</div></div></div>';
+      el.querySelectorAll('#pool .it').forEach((b) => b.addEventListener('click', () => { c.placed.push(+b.dataset.k); renderAnswer(); renderActions(); }));
+      el.querySelectorAll('#placed .it').forEach((b) => b.addEventListener('click', () => { c.placed.splice(c.placed.indexOf(+b.dataset.k), 1); renderAnswer(); renderActions(); }));
+    } else if (sp.type === 'nodes') {
+      const sel = c.resp, isEdge = sp.pick === 'edges', res = c.result;
+      const o = { uid: 'q', pick: !locked, label: sp.label };
+      if (isEdge) o.selEdges = new Set(sel); else o.selNodes = new Set(sel);
+      if (res) { if (isEdge) o.edgeMarks = res.marks; else { o.marks = res.marks; o.selNodes = new Set(); } }
+      if (sp.graphOpts) Object.assign(o, sp.graphOpts(sel, res));
+      el.innerHTML = '<div class="visual"><div style="flex:1 1 420px">' + gSVG(sp.graph, o) + '</div></div><p class="picked">' + (sp.pick === 'seq' ? 'Your sequence: ' : 'Your picks: ') + '<b>' + (sel.length ? esc(sel.map((x) => x.replace('>', '→')).join(sp.pick === 'seq' ? ' , ' : ' , ')) : 'none yet') + '</b></p>' +
+        (locked ? '' : '<button type="button" class="btn" id="clearPicks" style="align-self:flex-start;height:30px;font-size:.8rem">Clear picks</button>');
+      if (!locked) {
+        const svg = el.querySelector('svg');
+        svg.addEventListener('click', (ev) => {
+          let id = null;
+          if (isEdge) { const e = ev.target.closest('.ed'); id = e && e.dataset.e; } else { const n = ev.target.closest('.nd'); id = n && n.dataset.n; }
+          if (!id) return;
+          const k = c.resp.indexOf(id);
+          if (sp.pick === 'seq') { if (k >= 0) c.resp.splice(k, 1); else if (!sp.max || c.resp.length < sp.max) c.resp.push(id); }
+          else if (sp.max === 1) c.resp = k >= 0 ? [] : [id];
+          else if (k >= 0) c.resp.splice(k, 1); else c.resp.push(id);
+          renderAnswer(); renderActions();
+        });
+        const cl = $('clearPicks'); if (cl) cl.addEventListener('click', () => { c.resp = []; renderAnswer(); renderActions(); });
+      }
+    } else if (sp.type === 'cells') {
+      const sel = c.resp, res = c.result, marks = {}, labels = [];
+      if (res && res.marks) Object.keys(res.marks).forEach((k) => { marks[k] = res.marks[k]; });
+      else sel.forEach((k) => { marks[k] = 'sel'; });
+      if (sp.pick === 'seq') sel.forEach((k, i) => { const [x, y] = k.split(',').map(Number); labels.push({ x, y, text: String(i + 1) }); });
+      if (res && res.marks && sp.pick === 'seq') sp.answer.forEach((k, i) => { const [x, y] = k.split(',').map(Number); labels.push({ x, y, text: String(i + 1), corner: true }); if (!marks[k]) marks[k] = 'miss'; });
+      if (res && res.review) sp.answer.forEach((k, i) => { const [x, y] = k.split(',').map(Number); marks[k] = 'ok'; if (sp.pick === 'seq') labels.push({ x, y, text: String(i + 1) }); });
+      el.innerHTML = '<div class="visual"><canvas class="board" id="cellcv"' + (locked ? '' : ' style="cursor:pointer"') + ' role="img" aria-label="' + esc(sp.label || 'Maze') + '"></canvas></div><p class="picked">' + (sp.pick === 'seq' ? 'Your sequence: ' : 'Your picks: ') + '<b>' + (sel.length ? esc(sel.join('  ')) : 'none yet') + '</b></p>' +
+        (res && res.marks ? '<p class="cap">Green square: right. Red: wrong. Green dashed outline: a cell you missed.' + (sp.pick === 'seq' ? ' The small green number is the cell\'s place in the correct order.' : '') + '</p>' : '') +
+        (locked ? '' : '<button type="button" class="btn" id="clearPicks" style="align-self:flex-start;height:30px;font-size:.8rem">Clear picks</button>');
+      const cv = $('cellcv'), cs = sp.cs || 22;
+      H.drawGrid(cv, sp.grid, Object.assign({ cs, marks, labels }, sp.drawOpts ? sp.drawOpts() : {}));
+      if (!locked) {
+        cv.addEventListener('click', (ev) => {
+          const r = cv.getBoundingClientRect(), x = Math.floor((ev.clientX - r.left) / (r.width / sp.grid.W)), y = sp.grid.H - 1 - Math.floor((ev.clientY - r.top) / (r.height / sp.grid.H));
+          if (x < 0 || y < 0 || x >= sp.grid.W || y >= sp.grid.H || sp.grid.wall[x][y]) return;
+          const id = x + ',' + y, k = c.resp.indexOf(id);
+          if (sp.pick === 'seq') { if (k >= 0) c.resp.splice(k, 1); else if (!sp.max || c.resp.length < sp.max) c.resp.push(id); }
+          else if (sp.max === 1) c.resp = k >= 0 ? [] : [id];
+          else if (k >= 0) c.resp.splice(k, 1); else c.resp.push(id);
+          renderAnswer(); renderActions();
+        });
+        const cl = $('clearPicks'); if (cl) cl.addEventListener('click', () => { c.resp = []; renderAnswer(); renderActions(); });
+      }
+    } else if (sp.type === 'numeric') {
+      el.innerHTML = '<div class="numrow"><input type="text" inputmode="decimal" id="num" autocomplete="off" aria-label="Your answer" value="' + esc(c.resp) + '"' + (locked ? ' disabled' : '') + '><span class="unit">' + esc(sp.unit || '') + '</span></div>';
+      const inp = $('num'); inp.addEventListener('input', () => { c.resp = inp.value; renderActions(); });
+      inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !c.checked) checkAnswer(); });
+    }
+  }
+
+  function canCheck() {
+    const c = S.cur, sp = c.spec;
+    if (sp.type === 'mc') return c.resp.size === 1;
+    if (sp.type === 'multi') return c.resp.size >= 1;
+    if (sp.type === 'order') return c.placed.length === sp.items.length;
+    if (sp.type === 'nodes' || sp.type === 'cells') return sp.pick === 'seq' ? c.resp.length === (sp.max || sp.answer.length) : c.resp.length > 0;
+    if (sp.type === 'numeric') return c.resp.trim() !== '' && !Number.isNaN(parseFloat(c.resp));
+    return false;
+  }
+
+  function renderActions() {
+    const c = S.cur, sp = c.spec, el = $('actions'), hintsLeft = (sp.hints || []).length - c.hints, locked = c.checked || c.review;
+    el.innerHTML = (locked ? '' : '<button type="button" class="btn primary" id="checkBtn"' + (canCheck() ? '' : ' disabled') + '>Check my answer</button>' +
+      '<button type="button" class="btn" id="hintBtn"' + (hintsLeft > 0 ? '' : ' disabled') + '>Hint' + ((sp.hints || []).length ? ' (' + hintsLeft + ' left, −0.25 each)' : ' (none)') + '</button>') +
+      (locked ? '<button type="button" class="btn primary" id="nextBtn">' + (S.idx === Q.length - 1 ? 'Finish and see my report' : 'Next question') + '</button><button type="button" class="btn" id="practiceBtn">Practice a variation</button>' : '') +
+      (S.idx > 0 ? '<button type="button" class="btn" id="prevBtn">Previous</button>' : '');
+    const cb = $('checkBtn'); if (cb) cb.addEventListener('click', checkAnswer);
+    const hb = $('hintBtn'); if (hb) hb.addEventListener('click', () => { c.hints++; renderHints(); renderActions(); });
+    const nb = $('nextBtn'); if (nb) nb.addEventListener('click', () => { if (S.idx === Q.length - 1) { S.view = 'report'; render(); } else openQuestion(nextIndex()); });
+    const pb = $('practiceBtn'); if (pb) pb.addEventListener('click', () => openQuestion(S.idx, true));
+    const vb = $('prevBtn'); if (vb) vb.addEventListener('click', () => openQuestion(S.idx - 1));
+    renderHints();
+  }
+  function nextIndex() {
+    for (let k = 1; k <= Q.length; k++) { const j = (S.idx + k) % Q.length; if (j <= S.idx && k < Q.length && S.idx !== Q.length - 1) continue; const q = Q[j]; if ((!S.filter || q.parts.indexOf(S.filter) >= 0) && !(S.results[q.id] && S.results[q.id].done)) return j; }
+    return Math.min(S.idx + 1, Q.length - 1);
+  }
+  function renderHints() { const c = S.cur; $('hintbox').innerHTML = (c.spec.hints || []).slice(0, c.hints).map((t, i) => '<div class="hint"><b>Hint ' + (i + 1) + ':</b> ' + t + '</div>').join(''); }
+
+  // ------------------------------------------------------------ grading
+  function grade() {
+    const c = S.cur, sp = c.spec;
+    if (sp.type === 'mc') { const o = c.opts.find((x) => c.resp.has(x.idx)); return { score: o.ok ? 1 : 0, chosen: o }; }
+    if (sp.type === 'multi') { const good = c.opts.filter((o) => o.ok).length; let tp = 0, fp = 0; c.opts.forEach((o) => { if (c.resp.has(o.idx)) { if (o.ok) tp++; else fp++; } }); return { score: Math.max(0, (tp - fp) / Math.max(1, good)), tp, fp, good }; }
+    if (sp.type === 'order') { let ok = 0; c.placed.forEach((k, pos) => { if (k === pos) ok++; }); return { score: ok / sp.items.length, ok }; }
+    if (sp.type === 'nodes' || sp.type === 'cells') {
+      const ans = sp.answer, marks = {};
+      if (sp.pick === 'seq') { let ok = 0; ans.forEach((a, k) => { if (c.resp[k] === a) ok++; }); c.resp.forEach((x, k) => { marks[x] = ans[k] === x ? 'ok' : 'bad'; }); return { score: ok / ans.length, marks }; }
+      const A = new Set(ans); let tp = 0, fp = 0; c.resp.forEach((x) => { if (A.has(x)) { tp++; marks[x] = 'ok'; } else { fp++; marks[x] = 'bad'; } });
+      ans.forEach((a) => { if (c.resp.indexOf(a) < 0) marks[a] = sp.type === 'cells' ? 'miss' : 'bad'; });
+      return { score: Math.max(0, (tp - fp) / Math.max(1, ans.length)), marks, tp, fp };
+    }
+    if (sp.type === 'numeric') { const v = parseFloat(c.resp), ok = Math.abs(v - sp.answer) <= (sp.tol || 0) + 1e-9; return { score: ok ? 1 : 0, value: v }; }
+    return { score: 0 };
+  }
+
+  function checkAnswer() {
+    const c = S.cur; if (c.checked) return;
+    const g = grade(); c.checked = true; c.result = g;
+    let score = g.score; if (score > 0) score = Math.max(0, score - 0.25 * c.hints);
+    const rec = { done: true, score, hints: c.hints, last: { score: g.score, hints: c.hints } };
+    if (!c.practice) { S.results[c.q.id] = rec; save(); }
+    showResult(Object.assign({}, rec.last, { score }));
+    renderAnswer(); renderActions(); renderMap(); renderGrid(); renderScore();
+  }
+
+  function showResult(r) {
+    const c = S.cur, sp = c.spec, g = c.result;
+    if (!g && c.review) { c.result = g; }
+    const sc = r.score;
+    const cls = sc >= 0.999 ? 'ok' : sc > 0 ? 'part' : 'bad';
+    const head = sc >= 0.999 ? (r.hints ? 'Correct (with hints)' : 'Correct') : sc > 0 ? 'Partly right' : 'Not quite';
+    let extra = '';
+    if (g && sp.type === 'mc' && g.chosen && !g.chosen.ok) extra += '<p><b>Why that one is tempting, and wrong:</b> ' + (g.chosen.why || '') + '</p>';
+    if (g && sp.type === 'mc') { const right = c.opts.find((o) => o.ok); if (right && right.why) extra += '<p><b>Why the right answer is right:</b> ' + right.why + '</p>'; }
+    if (g && sp.type === 'multi') extra += '<p>' + c.opts.map((o) => '<b>' + (o.ok ? '✓' : '✗') + '</b> ' + o.html + (o.why ? ' <span style="color:var(--ink-3)">(' + o.why + ')</span>' : '')).join('<br>') + '</p>';
+    if (g && sp.type === 'order') extra += '<p><b>Correct order:</b></p><ol style="margin:0;padding-left:1.3rem">' + sp.items.map((t) => '<li>' + t + '</li>').join('') + '</ol>';
+    if (g && (sp.type === 'nodes' || sp.type === 'cells')) extra += '<p><b>Answer:</b> ' + esc(sp.answer.map((x) => x.replace('>', '→')).join(sp.pick === 'seq' ? ' , ' : ' , ') || 'none') + '</p>';
+    if (g && sp.type === 'numeric') extra += '<p><b>Answer:</b> <span class="mono">' + fmt(sp.answer) + '</span>' + (sp.unit ? ' ' + esc(sp.unit) : '') + '</p>';
+    $('feedback').innerHTML = '<div class="fb ' + cls + '"><div class="fh">' + head + '<small>' + (c.practice ? 'practice, not scored' : fmt(Math.round(sc * 100) / 100) + ' of 1 point') + '</small></div>' + (sp.explain ? '<p>' + sp.explain + '</p>' : '') + extra + '</div>';
+    if (sp.demo) { $('demo').innerHTML = '<div class="demo"><h4>' + esc(sp.demoTitle || 'Watch it happen') + '</h4><div class="visual" id="demoBody"></div></div>'; sp.demo($('demoBody'), H, c); }
+  }
+
+  // ------------------------------------------------------------ intro and report
+  function renderIntro() {
+    const first = BANK.intro || '';
+    const resumable = S.saved && Object.keys(S.results).length;
+    $('main').innerHTML = '<section class="card intro"><h3>' + esc(BANK.welcomeTitle) + '</h3>' + first +
+      '<ul><li><b>' + Q.length + ' questions</b>, grouped by the parts on the map. Every part gets at least ' + BANK.minPerPart + ' questions, so nothing is skipped.</li>' +
+      (BANK.handsOn || '<li>You do things by hand: trace the heap, predict the order of expansion, find bugs in changed copies of your own code, audit heuristics, and recognise how a search spreads over a maze.</li>') +
+      '<li>You get one scored attempt per question. Hints cost 0.25 points each. After every answer I explain it, and you can practise a fresh variation that is not scored.</li>' +
+      '<li>The map fills in as you go. At the end you get a report that names what to review.</li></ul>' +
+      '<div class="actions"><button type="button" class="btn primary" id="startBtn">' + (resumable ? 'Continue where I left off' : 'Start the evaluation') + '</button>' + (resumable ? '<button type="button" class="btn" id="resetBtn">Start over</button>' : '') + '</div></section>';
+    $('startBtn').addEventListener('click', () => { const next = Q.findIndex((q) => !(S.results[q.id] && S.results[q.id].done)); openQuestion(next >= 0 ? next : 0); });
+    const rb = $('resetBtn'); if (rb) rb.addEventListener('click', () => { S.results = {}; S.saved = false; S.seed = 1 + Math.floor(Math.random() * 1e6); save(); S.filter = null; render(); });
+  }
+
+  function renderReport() {
+    const o = overall(), m = mastery();
+    const verdict = o.pct === null ? 'Nothing answered yet.' : o.pct >= 0.9 ? 'You really know this algorithm. The few misses below are worth a quick look.' : o.pct >= 0.75 ? 'Solid understanding with a few gaps. Fix the red and amber parts and you are there.' : o.pct >= 0.5 ? 'Partial understanding. You can follow the algorithm but some parts are not secure yet.' : 'The foundations are not there yet. Work through the map from the top, one part at a time.';
+    const missed = Q.filter((q) => { const r = S.results[q.id]; return r && r.done && r.score < 0.999; });
+    const untested = Q.filter((q) => !(S.results[q.id] && S.results[q.id].done));
+    $('main').innerHTML = '<section class="card report"><h3>Your report</h3><div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline"><span class="bigscore tabnum">' + (o.pct === null ? '–' : Math.round(o.pct * 100) + '%') + '</span><span>' + fmt(Math.round(o.got * 100) / 100) + ' points from ' + o.done + ' of ' + o.total + ' questions</span></div><p class="prompt">' + verdict + '</p>' +
+      (untested.length ? '<p class="prompt"><b>' + untested.length + ' questions are still unanswered</b>, so the parts they cover are not fully tested yet.</p>' : '') +
+      '<div class="tablewrap"><table><thead><tr><th>Part of the algorithm</th><th>Mastery</th><th>Answered</th><th>What to do</th></tr></thead><tbody>' +
+      PARTS.map((p) => { const x = m[p.id]; return '<tr><td><b>' + esc(p.label) + '</b></td><td><span class="pill ' + x.cls + '">' + (x.pct === null ? 'not tested' : Math.round(x.pct * 100) + '%') + '</span></td><td class="tabnum">' + x.n + ' of ' + x.total + '</td><td>' +
+        (x.pct === null ? 'Answer the questions for this part.' : x.pct >= 0.8 ? 'Solid. Nothing to add.' : esc(p.review || 'Revisit this part.')) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+      (missed.length ? '<h4 style="margin:6px 0 0">Questions to revisit</h4><div class="actions" style="flex-direction:column;align-items:stretch;gap:6px">' + missed.map((q) => { const i = Q.indexOf(q); return '<button type="button" class="btn" style="height:auto;padding:8px 12px;text-align:left" data-i="' + i + '">' + (i + 1) + '. ' + esc(q.title) + ' <span class="mono" style="color:var(--ink-3)">(' + fmt(Math.round(S.results[q.id].score * 100) / 100) + ' of 1)</span></button>'; }).join('') + '</div>' : '') +
+      '<div class="actions"><button type="button" class="btn primary" id="backBtn">' + (untested.length ? 'Continue answering' : 'Back to the questions') + '</button><button type="button" class="btn" id="resetBtn2">Start over with new numbers</button></div></section>';
+    $('main').querySelectorAll('button[data-i]').forEach((b) => b.addEventListener('click', () => openQuestion(+b.dataset.i)));
+    $('backBtn').addEventListener('click', () => { const next = Q.findIndex((q) => !(S.results[q.id] && S.results[q.id].done)); openQuestion(next >= 0 ? next : 0); });
+    $('resetBtn2').addEventListener('click', () => { S.results = {}; S.seed = 1 + Math.floor(Math.random() * 1e6); save(); S.filter = null; S.view = 'intro'; render(); });
+  }
+
+  // ------------------------------------------------------------ engine self-check against the student's real Python
+  function selfCheck() {
+    let ok = 0, total = 0;
+    (DATA.golden || []).forEach((t) => {
+      const pos = {}; for (let i = 0; i < t.n; i++) pos[String(i)] = [0, 0];
+      const g = { pos, size: [1, 1], edges: t.edges.map((e) => ({ u: String(e[0]), v: String(e[1]), w: e[2] })), start: String(t.start), goal: String(t.goal), h: {} };
+      (t.h || []).forEach((v, i) => { g.h[String(i)] = v; });
+      const r = bestFirst(g, { kind: BANK.algo === 'astar' ? 'astar' : 'ucs' });
+      total++;
+      const same = r.found === t.found && (!t.found || (r.path.join(',') === t.path.join(',') && Math.abs(r.cost - t.cost) < 1e-9)) && r.order.join(',') === t.order.join(',');
+      if (same) ok++;
+    });
+    return { ok, total };
+  }
+
+  // ------------------------------------------------------------ main render
+  function render() {
+    $('h1').textContent = BANK.title; $('sub').textContent = BANK.subtitle;
+    renderScore(); renderMap(); renderGrid();
+    if (S.view === 'intro') renderIntro(); else if (S.view === 'report') renderReport(); else renderQuestion();
+  }
+
+  function init() {
+    load();
+    const sc = BANK.selfCheck ? BANK.selfCheck(DATA, H) : Object.assign(selfCheck(), { what: 'random graphs', same: 'same path, cost and expansion order' });
+    if (BANK.mapTitle) $('mapTitle').textContent = BANK.mapTitle;
+    if (BANK.mapNote) $('mapNote').textContent = BANK.mapNote;
+    $('foot').textContent = 'The answer keys come from a reference engine that was checked against your real ' + BANK.func + ' on ' + sc.total + ' ' + sc.what + ': ' + sc.ok + ' of ' + sc.total + ' identical (' + sc.same + '). Code lines shown are read from your ' + (BANK.codeFile || 'search/search.py') + ' (' + DATA.code.generated + '). Your progress is remembered in this browser only. This page contains your solution code, so keep it to yourself.';
+    $('clearFilter').addEventListener('click', () => { S.filter = null; render(); });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && S.view === 'question' && S.cur && !S.cur.checked && !S.cur.review && S.cur.spec.type !== 'numeric' && canCheck() && document.activeElement && document.activeElement.tagName !== 'BUTTON') checkAnswer(); });
+    new MutationObserver(() => { if (S.view === 'question') renderQuestion(); renderMap(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', () => { if (S.view === 'question') renderQuestion(); }); }
+    render();
+    if (window.__EVAL_TEST__) window.__EVAL_TEST__.api = { S, Q, H, BANK, genSpec, openQuestion, checkAnswer, grade, canCheck, selfCheck: () => sc, render, mastery, overall };
+  }
+  init();
+})();
+</script>
