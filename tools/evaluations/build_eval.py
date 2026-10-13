@@ -1,8 +1,8 @@
 """
-Build the four teacher evaluations (UCS, A*, CornersProblem, corners heuristic) from your own code in search/.
+Build the seven teacher evaluations (UCS, A*, CornersProblem, corners heuristic, food heuristic, closest dot, D* Lite) from your own code in search/.
 
-    python tools/evaluations/build_eval.py                 # writes tools/evaluations/out/<name>_evaluation.html for all four
-    python tools/evaluations/build_eval.py --only ucs      # ucs | astar | corners | cornersheur
+    python tools/evaluations/build_eval.py                 # writes tools/evaluations/out/<name>_evaluation.html for all seven
+    python tools/evaluations/build_eval.py --only ucs      # ucs | astar | corners | cornersheur | food | closestdot | dstar
     python tools/evaluations/build_eval.py --search-dir path/to/search --out-dir some/folder
 
 What goes into each page:
@@ -55,6 +55,11 @@ ALGOS = {
     # Q5 and Q6: built by corners_data.py (they read searchAgents.py and run your CornersProblem on mazes)
     "corners": {"kind": "corners", "func": "CornersProblem", "bank": "bank_corners.js", "out": "corners_evaluation.html", "title": "Corners Problem Evaluation"},
     "cornersheur": {"kind": "corners", "func": "cornersHeuristic", "bank": "bank_cornersheur.js", "out": "cornersheur_evaluation.html", "title": "Corners Heuristic Evaluation"},
+    # Q7 and Q8: built by food_data.py (they read searchAgents.py and run your foodHeuristic / ClosestDotSearchAgent on mazes)
+    "food": {"kind": "food", "func": "foodHeuristic", "bank": "bank_food.js", "out": "food_evaluation.html", "title": "Food Heuristic Evaluation"},
+    "closestdot": {"kind": "food", "func": "ClosestDotSearchAgent", "bank": "bank_closestdot.js", "out": "closestdot_evaluation.html", "title": "Closest Dot Evaluation"},
+    # Q9: built by dstar_data.py (it reads dStarLite.py and runs your D* Lite on mazes)
+    "dstar": {"kind": "dstar", "func": "DStarLite", "bank": "bank_dstar.js", "out": "dstar_evaluation.html", "title": "D* Lite Evaluation"},
 }
 MAZES = ["tinyMaze", "smallMaze", "mediumMaze", "openMaze"]
 
@@ -138,6 +143,12 @@ def build(algo, search_dir, out_dir):
     if spec.get("kind") == "corners":
         import corners_data                                    # noqa: E401  (Q5 and Q6 read searchAgents.py instead of search.py)
         return corners_data.build_corners(spec, algo, search_dir, out_dir)
+    if spec.get("kind") == "dstar":
+        import dstar_data                                      # noqa: E401  (Q9 reads dStarLite.py)
+        return dstar_data.build_dstar(spec, algo, search_dir, out_dir)
+    if spec.get("kind") == "food":
+        import food_data                                       # noqa: E401  (Q7 and Q8 read searchAgents.py too)
+        return food_data.build_food(spec, algo, search_dir, out_dir)
     search_dir = Path(search_dir).resolve()
     os.chdir(search_dir)
     sys.path.insert(0, str(search_dir))

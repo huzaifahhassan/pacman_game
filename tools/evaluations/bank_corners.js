@@ -291,12 +291,12 @@ const questions = [
       demo: (el) => { el.innerHTML = '<pre style="margin:0;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;font:12.5px/1.6 var(--font-mono);overflow-x:auto;max-width:100%">&gt;&gt;&gt; visited = set()\n&gt;&gt;&gt; visited.add(((3, 3), [(1, 1), (1, 5)]))\nTypeError: unhashable type: \'list\'</pre>'; },
       explain: 'This is why the state uses ' + C('tuple(...)') + ': the same filter, but the result can be hashed.' }) },
 
-  { id: 'k-order-tuple', title: 'Which tuple is stored?', parts: ['order', 'content', 'form'], level: 2,
+  { id: 'k-order-tuple', title: 'Which successor state is built?', parts: ['order', 'content', 'form'], level: 2,
     gen: (r) => { const pick = find(r, () => { const gr = mazeFor(r), pair = r.shuffle([0, 1, 2, 3]).slice(0, 2); return { gr, left: pair.slice().sort((a, b) => a - b), first: pair[0], second: pair[1] }; }, () => true, 1), gr = pick.gr, pos = gr.start, L = pick.left, cs = cornersOf(gr);
       const done = [0, 1, 2, 3].filter((i) => L.indexOf(i) < 0);
       const lcorners = (list) => stR(gr, pos[0], pos[1], list);
       return { type: 'mc',
-        prompt: 'The search reaches a state where Pacman is at ' + ptS(pos[0], pos[1]) + ' and the corners still to visit are the ' + cornerWord(L[1]) + ' and the ' + cornerWord(L[0]) + ' ones (in that order of mention). <b>Which state does <code>next_unvisited</code> actually build?</b>',
+        prompt: 'A move has just brought Pacman onto the cell <b>' + ptS(pos[0], pos[1]) + '</b>, so <code>next_position</code> is ' + ptS(pos[0], pos[1]) + '. After that move the corners still to visit are the ' + cornerWord(L[1]) + ' and the ' + cornerWord(L[0]) + ' ones (in that order of mention). <b>Which successor state, <code>(next_position, next_unvisited)</code>, does your <code>getSuccessors</code> build for this move?</b> Pay attention to the order of the two corners.',
         visual: (el) => { cBoard(el, gr, { un: L }, 'Done: ' + done.map((i) => cornerWord(i)).join(' and ') + '. Still to do: ' + L.map((i) => cornerWord(i)).join(' and ')); },
         options: [O(C(esc(lcorners(L))), true, 'Always in the order of ' + C('self.corners') + ' (SW, NW, SE, NE): the filter keeps that order.'),
           O(C(esc(lcorners(L.slice().reverse()))), false, 'Same corners in the other order. Tuples compare in order, so this would be a different state.'),

@@ -101,7 +101,18 @@ class DStarLite:
             k2 = min(g(s), rhs(s))
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # The key decides which vertex is repaired first. It has two parts that
+        # Python compares like words in a dictionary (k1 first, k2 only on a tie).
+        #   smaller = the better of what the vertex remembers (g) and what its
+        #             neighbours say now (rhs): its most optimistic distance to
+        #             the goal.
+        #   k1 adds h(s_start, s), a guess of the distance from Pacman to s, and
+        #   k_m, the distance Pacman has walked since the keys in U were made.
+        #   k2 is just `smaller`: on equal k1 the vertex closer to the goal goes
+        #   first.
+        smaller = min(self.getG(s), self.getRhs(s))
+        return (smaller + self.h(self.sStart, s) + self.km, smaller)
 
     def initialize(self):
         """
@@ -110,7 +121,18 @@ class DStarLite:
         and insert s_goal into the open list with its key.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # Start from nothing known: an empty open list, k_m = 0 and every g and
+        # rhs value is infinity (a missing dictionary entry already means that).
+        # Only the goal is certain: it is 0 steps from itself, so its rhs is 0.
+        # It is locally inconsistent (g = infinity, rhs = 0), so it goes on the
+        # open list, and the search spreads outwards from it.
+        self.U = util.DStarLitePriorityQueue()
+        self.km = 0
+        self.g = {}
+        self.rhs = {}
+        self.rhs[self.sGoal] = 0
+        self.U.insert(self.sGoal, self.calculateKey(self.sGoal))
 
     def updateVertex(self, u):
         """
@@ -122,7 +144,22 @@ class DStarLite:
             open list with its current key
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # Ask the neighbours again: rhs is one step plus the smallest g among
+        # the neighbours Pacman can still walk to (a wall costs infinity). The
+        # goal is the exception, its rhs stays 0.
+        if u != self.sGoal:
+            best = INF
+            for s in self.belief.neighbors(u):
+                best = min(best, self.belief.cost(u, s) + self.getG(s))
+            self.rhs[u] = best
+
+        # Take u off the open list first (remove does nothing if it is not
+        # there), then put it back only if g and rhs disagree. This way u is
+        # in the list at most once, and always with an up to date key.
+        self.U.remove(u)
+        if self.getG(u) != self.getRhs(u):
+            self.U.insert(u, self.calculateKey(u))
 
     def computeShortestPath(self):
         """
@@ -139,7 +176,32 @@ class DStarLite:
         Hint: read k_old with self.U.topKey() BEFORE calling self.U.pop().
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # Keep repairing only while the next vertex could still change Pacman's
+        # route: its key is smaller than Pacman's own key, or Pacman's own
+        # vertex still disagrees with its neighbours. Whatever is left in U
+        # after that is simply not needed yet.
+        while self.U.topKey() < self.calculateKey(self.sStart) or self.getRhs(self.sStart) != self.getG(self.sStart):
+            k_old = self.U.topKey()   # read it BEFORE the pop, which removes the entry
+            u = self.U.pop()
+            k_new = self.calculateKey(u)
+            if k_old < k_new:
+                # The key was made when Pacman stood somewhere else and is now too
+                # small. Put u back with its fresh key and let others go first.
+                self.U.insert(u, k_new)
+            elif self.getG(u) > self.getRhs(u):
+                # Overconsistent (good news): a shorter way exists. Adopt it, then
+                # every neighbour has to ask again, because u is now cheaper.
+                self.g[u] = self.getRhs(u)
+                for s in self.belief.neighbors(u):
+                    self.updateVertex(s)
+            else:
+                # Underconsistent (bad news): the old g can no longer be trusted.
+                # Forget it, then u and every neighbour that relied on it ask again.
+                self.g[u] = INF
+                self.updateVertex(u)
+                for s in self.belief.neighbors(u):
+                    self.updateVertex(s)
 
     def nextStep(self):
         """
@@ -150,7 +212,21 @@ class DStarLite:
         (no path to the goal exists given what Pacman currently knows).
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # Nowhere to go if Pacman is already at the goal, or if the goal is
+        # unreachable on what he knows (g of his own cell is infinity).
+        if self.sStart == self.sGoal or self.getG(self.sStart) == INF:
+            return None
+
+        # Not a search: g already holds the distance to the goal for every
+        # vertex, so just step to the neighbour where "one step + its g" is
+        # smallest. The strict < keeps the first of any tie.
+        best, bestCost = None, INF
+        for s in self.belief.neighbors(self.sStart):
+            cost = self.belief.cost(self.sStart, s) + self.getG(s)
+            if cost < bestCost:
+                best, bestCost = s, cost
+        return best
 
     def updateEdgeCosts(self, changedCells):
         """
@@ -168,4 +244,20 @@ class DStarLite:
           3. computeShortestPath()
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # Pacman has walked since the last change. The keys already in U were
+        # made for his old position, so add the distance he moved to k_m. That
+        # keeps every old key a lower bound of its fresh key without having to
+        # re-sort the whole list. Then remember where he is now.
+        self.km += self.h(self.sLast, self.sStart)
+        self.sLast = self.sStart
+
+        # A new wall at w makes every move into w and out of w cost infinity.
+        # That changes the rhs of w itself and of each of its neighbours (their
+        # best neighbour may have been w), so those are the vertices to update.
+        for w in changedCells:
+            self.updateVertex(w)
+            for s in self.belief.neighbors(w):
+                self.updateVertex(s)
+
+        self.computeShortestPath()

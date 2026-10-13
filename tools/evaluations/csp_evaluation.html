@@ -1,0 +1,1283 @@
+<title>CSP Evaluation Sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: the same "classroom" as the Pacman evaluations: the list of CSPs on the left, one CSP at a time on the right. */
+:root {
+  --font-display: "Silkscreen", "Courier New", monospace;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --bg: #edf0f8; --surface: #ffffff; --surface-2: #e5e9f4; --ink: #10172b; --ink-2: #444f6e; --ink-3: #5d6788; --line: #cdd4e6;
+  --accent: #2641d8; --accent-ink: #ffffff; --hl: rgba(38, 65, 216, .14);
+  --ok: #12733a; --ok-soft: rgba(18, 115, 58, .12);
+  --bad: #b3261e; --bad-soft: rgba(179, 38, 30, .12);
+  --warn: #8a5a00; --warn-soft: rgba(184, 120, 0, .16);
+  --none: #8a93b0; --none-soft: rgba(138, 147, 176, .14);
+
+  /* the three map colours (also used as value colours); each has its own text colour */
+  --k1: #d6455d; --k1-ink: #ffffff; --k2: #3b6fe0; --k2-ink: #ffffff; --k3: #eab72a; --k3-ink: #10172b;
+  --board-a: #f3f5fc; --board-b: #c6cfea; --queen: #10172b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5; --line: #27345f;
+    --accent: #8fa3ff; --accent-ink: #0a0f1f; --hl: rgba(143, 163, 255, .2);
+    --ok: #6fe39a; --ok-soft: rgba(111, 227, 154, .13); --bad: #ff8e9b; --bad-soft: rgba(255, 142, 155, .14);
+    --warn: #ffc766; --warn-soft: rgba(255, 199, 102, .16); --none: #7d88ad; --none-soft: rgba(125, 136, 173, .16);
+    --k1: #ff7a8e; --k1-ink: #0a0f1f; --k2: #8fa3ff; --k2-ink: #0a0f1f; --k3: #ffd25a; --k3-ink: #0a0f1f;
+    --board-a: #1a2448; --board-b: #26346a; --queen: #ffe14d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f1f; --surface: #121a34; --surface-2: #1a2448; --ink: #e9edfb; --ink-2: #aab4d4; --ink-3: #8590b5; --line: #27345f;
+  --accent: #8fa3ff; --accent-ink: #0a0f1f; --hl: rgba(143, 163, 255, .2);
+  --ok: #6fe39a; --ok-soft: rgba(111, 227, 154, .13); --bad: #ff8e9b; --bad-soft: rgba(255, 142, 155, .14);
+  --warn: #ffc766; --warn-soft: rgba(255, 199, 102, .16); --none: #7d88ad; --none-soft: rgba(125, 136, 173, .16);
+  --k1: #ff7a8e; --k1-ink: #0a0f1f; --k2: #8fa3ff; --k2-ink: #0a0f1f; --k3: #ffd25a; --k3-ink: #0a0f1f;
+  --board-a: #1a2448; --board-b: #26346a; --queen: #ffe14d;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+button, input, select { font: inherit; color: inherit; }
+.app { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 18px; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.3rem, 1rem + 1.3vw, 1.85rem); letter-spacing: .03em; text-wrap: balance; }
+h2 { margin: 0 0 8px; font-size: 1rem; font-weight: 600; text-wrap: balance; }
+.sub { margin: 6px 0 0; max-width: 72ch; font-size: .92rem; color: var(--ink-2); }
+button:focus-visible, input:focus-visible, select:focus-visible, .cell:focus-visible, .sq:focus-visible, .chip:focus-visible, .rg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; min-width: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.top { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-end; justify-content: space-between; }
+.scorebox { display: flex; align-items: center; gap: 14px; }
+.ring { position: relative; width: 62px; height: 62px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring b { position: absolute; inset: 0; display: grid; place-items: center; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.scorebox small { display: block; color: var(--ink-3); font-size: .76rem; }
+
+.layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* list of CSPs */
+.csplist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* narrow screens: the list shrinks to ten numbered buttons and the puzzle comes before the glossary */
+@media (max-width: 960px) {
+  .side { display: contents; }
+  .layout > .side > .panel:first-child { order: 1; }
+  .layout > main { order: 2; }
+  .layout > .side > .panel:last-child { order: 3; }
+  .csplist { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .csplist .cspitem { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 0; padding: 6px 4px; }
+  .csplist .cspitem .nm { display: none; }
+  .csplist .cspitem .pts { text-align: center; min-width: 0; font-size: .7rem; }
+}
+.cspitem { display: grid; grid-template-columns: 1.7rem minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; height: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.cspitem:hover { background: var(--surface-2); }
+.cspitem[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--hl); }
+.cspitem .num { font-family: var(--font-display); font-weight: 700; color: var(--accent); font-size: 1rem; }
+.cspitem b { display: block; font-size: .84rem; font-weight: 600; line-height: 1.25; }
+.cspitem small { display: block; font-size: .7rem; color: var(--ink-3); line-height: 1.3; }
+.cspitem .pts { font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-3); min-width: 1.6rem; text-align: right; }
+.cspitem.solid { border-color: var(--ok); } .cspitem.solid .pts { color: var(--ok); }
+.cspitem.okay { border-color: var(--warn); } .cspitem.okay .pts { color: var(--warn); }
+.cspitem.shaky { border-color: var(--bad); } .cspitem.shaky .pts { color: var(--bad); }
+.legendrow { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 10px 0 0; padding: 0; list-style: none; font-size: .7rem; color: var(--ink-3); }
+.legendrow li { display: flex; align-items: center; gap: 5px; }
+.legendrow i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; border: 2px solid var(--none); }
+.legendrow i.solid { border-color: var(--ok); } .legendrow i.okay { border-color: var(--warn); } .legendrow i.shaky { border-color: var(--bad); }
+
+.ingr { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: .86rem; }
+.ingr b { color: var(--accent); }
+details.gloss { margin-top: 10px; font-size: .84rem; }
+details.gloss summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+details.gloss dl { margin: 8px 0 0; display: grid; gap: 6px; }
+details.gloss dt { font-weight: 600; } details.gloss dd { margin: 0; color: var(--ink-2); }
+
+/* one CSP */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.qmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: .74rem; color: var(--ink-3); }
+.tag { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); font-size: .72rem; font-weight: 600; color: var(--ink-2); }
+.stars { letter-spacing: 2px; color: var(--warn); }
+.stars i { font-style: normal; } .stars i.off { color: var(--line); }
+.card h3 { margin: 0; font-size: 1.2rem; text-wrap: balance; }
+.prompt { margin: 0; max-width: 76ch; }
+.stage { min-width: 0; }
+.stagegrid { display: flex; flex-wrap: wrap; gap: 18px 24px; align-items: flex-start; }
+.pane { min-width: 0; flex: 1 1 260px; display: flex; flex-direction: column; gap: 10px; }
+.cap { margin: 0; font-size: .76rem; color: var(--ink-3); max-width: 60ch; }
+.status { margin: 0; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: .9rem; min-height: 2.4em; }
+.status.ok { border-color: var(--ok); background: var(--ok-soft); }
+.status.bad { border-color: var(--bad); background: var(--bad-soft); }
+.status.hint { border-color: var(--warn); background: var(--warn-soft); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.btn { height: 38px; padding: 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .88rem; font-weight: 500; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font-size: .82rem; align-self: flex-start; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: .88rem; cursor: pointer; }
+.chk input { width: 18px; height: 18px; accent-color: var(--accent); }
+.lock { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--ink-3); font-size: .86rem; }
+
+/* number grids: sudoku and magic square */
+.sgrid { display: grid; grid-template-columns: repeat(var(--n), var(--cell)); border: 3px solid var(--ink); border-radius: 6px; width: max-content; max-width: 100%; background: var(--surface); }
+.cell { width: var(--cell); height: var(--cell); border: 1px solid var(--line); background: var(--surface); font-family: var(--font-mono); font-weight: 600; font-size: calc(var(--cell) * .5); display: grid; place-items: center; cursor: pointer; position: relative; padding: 0; }
+.cell.br { border-right: 3px solid var(--ink); } .cell.bb { border-bottom: 3px solid var(--ink); }
+.cell.given { background: var(--surface-2); cursor: default; }
+.cell.mine { color: var(--accent); }
+.cell.sel { outline: 3px solid var(--accent); outline-offset: -3px; background: var(--hl); }
+.cell.bad { background: var(--bad-soft); color: var(--bad); }
+.cell.hl { box-shadow: inset 0 0 0 4px var(--warn); }
+.pm { position: absolute; inset: 4px; display: grid; grid-template-columns: 1fr 1fr; align-content: center; font-weight: 500; font-size: calc(var(--cell) * .27); color: var(--ink-3); line-height: 1.15; text-align: center; }
+.pm i { font-style: normal; }
+.pad { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 6px; max-width: 280px; }
+.padbtn { height: 42px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: 600 1.05rem var(--font-mono); cursor: pointer; }
+.padbtn:hover { background: var(--surface-2); } .padbtn.used { opacity: .4; }
+.mgrid { display: grid; grid-template-columns: repeat(5, var(--cell)); gap: 5px; width: max-content; max-width: 100%; }
+.mgrid .cell { border: 2px solid var(--ink-3); border-radius: 6px; }
+.sumb { width: var(--cell); height: var(--cell); display: grid; place-items: center; border-radius: 6px; border: 1px dashed var(--line); font: 600 calc(var(--cell) * .3) var(--font-mono); color: var(--ink-3); text-align: center; line-height: 1.1; }
+.sumb small { display: block; font-size: .7em; font-weight: 500; }
+.sumb.ok { border: 2px solid var(--ok); background: var(--ok-soft); color: var(--ok); }
+.sumb.bad { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); }
+
+/* chess boards */
+.board { display: grid; grid-template-columns: repeat(var(--n), var(--sq)); border: 3px solid var(--ink); border-radius: 6px; width: max-content; max-width: 100%; }
+.sq { width: var(--sq); height: var(--sq); border: 0; padding: 0; display: grid; place-items: center; font-size: calc(var(--sq) * .62); line-height: 1; cursor: pointer; position: relative; }
+.sq.a { background: var(--board-a); } .sq.b { background: var(--board-b); }
+.sq.att::after { content: ""; position: absolute; inset: 0; background: var(--bad); opacity: .24; pointer-events: none; }
+.sq.ok::before { content: ""; position: absolute; inset: 5px; border: 3px dashed var(--ok); border-radius: 6px; pointer-events: none; }
+.sq.colsel { box-shadow: inset 0 0 0 3px var(--accent); }
+.sq .q { color: var(--queen); position: relative; z-index: 1; }
+.sq.bad .q { color: var(--bad); }
+.sq .cnt { position: absolute; right: 4px; bottom: 2px; font: 600 calc(var(--sq) * .26) var(--font-mono); color: var(--ink-2); z-index: 1; }
+
+/* rules checklist */
+.rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rules li { position: relative; display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .86rem; }
+.rules li.ok { border-color: var(--ok); background: var(--ok-soft); }
+.rules li.bad { border-color: var(--bad); background: var(--bad-soft); }
+.rules .ic { font-weight: 700; text-align: center; }
+.rules li.ok .ic { color: var(--ok); } .rules li.bad .ic { color: var(--bad); }
+.rules em.tg { font-style: normal; font-size: .7rem; color: var(--ink-3); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 4px; white-space: nowrap; }
+.pane h5 { margin: 0; font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+/* tables of choices: timetable and pets */
+.choice { border-collapse: collapse; font-size: .9rem; max-width: 100%; }
+.choice th, .choice td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.choice th { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.tablewrap { overflow-x: auto; max-width: 100%; }
+.slotrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.slot { height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .84rem; cursor: pointer; white-space: nowrap; }
+.slot:hover { background: var(--surface-2); }
+.slot[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.slot.hl { box-shadow: 0 0 0 3px var(--warn); }
+select.sel { height: 36px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 6.5rem; }
+select.sel.hl { box-shadow: 0 0 0 3px var(--warn); }
+.eq { margin: 0; font: 600 1.6rem/1.35 var(--font-mono); letter-spacing: .25em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; width: max-content; max-width: 100%; overflow-x: auto; }
+.live { font: 600 1.15rem var(--font-mono); letter-spacing: .12em; margin: 0; }
+.lsels { display: flex; flex-wrap: wrap; gap: 10px; }
+.lsel { display: flex; align-items: center; gap: 8px; font: 600 1.1rem var(--font-mono); }
+
+/* arc consistency */
+.acrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.vname { font: 700 1.2rem var(--font-mono); width: 1.6rem; text-align: center; color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-width: 48px; height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: 600 1.05rem var(--font-mono); cursor: pointer; }
+.chip:hover:not(.gone) { background: var(--surface-2); }
+.chip.gone { background: var(--none-soft); color: var(--ink-3); text-decoration: line-through; cursor: default; opacity: .6; }
+.chip.hl { border-color: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.chip.shake { animation: shake .3s; border-color: var(--bad); }
+.acrule { margin: 4px 0 4px 2.3rem; font: 600 .9rem var(--font-mono); color: var(--ink-2); }
+ol.log { margin: 0; padding-left: 1.3rem; font-size: .84rem; color: var(--ink-2); display: flex; flex-direction: column; gap: 3px; }
+
+/* maps */
+svg.aumap { width: 100%; max-width: 440px; height: auto; display: block; }
+svg.augraph { width: 100%; max-width: 300px; height: auto; display: block; }
+.rg { cursor: pointer; outline: none; }
+.rg polygon { stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.rg:hover polygon { filter: brightness(1.07); }
+.rg:focus-visible polygon { stroke: var(--accent); stroke-width: 4; }
+.rg.glow polygon { stroke: var(--warn); stroke-width: 5; stroke-dasharray: 8 5; }
+.rg text { pointer-events: none; font-family: var(--font-mono); font-weight: 600; }
+polygon.badline { fill: none; stroke: var(--bad); stroke-width: 5; stroke-linejoin: round; pointer-events: none; }
+svg.augraph text { font-family: var(--font-mono); }
+.mrv { border-collapse: collapse; font-size: .84rem; width: 100%; }
+.mrv th, .mrv td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.mrv th { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.mrv tr.done td { color: var(--ink-3); }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 3px; border: 1px solid var(--ink); vertical-align: -1px; }
+.dot.off { background: none !important; border-style: dashed; border-color: var(--ink-3); }
+
+/* quick check and explanation */
+.sec { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.sec h4 { margin: 0; font-size: .74rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.qtext { margin: 0; font-weight: 600; max-width: 70ch; }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: 8px; align-items: start; text-align: left; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.opt:hover:not(:disabled) { background: var(--surface-2); }
+.opt .mk { width: 16px; height: 16px; margin-top: 3px; border: 2px solid var(--ink-3); border-radius: 50%; }
+.opt.right { border-color: var(--ok); background: var(--ok-soft); }
+.opt.wrong { border-color: var(--bad); background: var(--bad-soft); opacity: .8; }
+.opt:disabled { cursor: default; }
+.fb { margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); font-size: .9rem; }
+.fb.ok { border-color: var(--ok); background: var(--ok-soft); } .fb.bad { border-color: var(--bad); background: var(--bad-soft); }
+.vdc { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 820px) { .vdc { grid-template-columns: minmax(0, 1fr); } }
+.vdc > div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); }
+.vdc b { display: block; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+.vdc p { margin: 0; font-size: .88rem; }
+.explain h5 { margin: 4px 0 0; font-size: .95rem; }
+.explain ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 6px; max-width: 78ch; }
+.take { margin: 0; padding: 10px 14px; border-left: 4px solid var(--accent); background: var(--hl); border-radius: 0 8px 8px 0; max-width: 78ch; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+
+/* report */
+.report table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+.report th, .report td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.report th { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.bigscore { font-family: var(--font-display); font-size: clamp(1.8rem, 1rem + 3vw, 2.8rem); font-weight: 700; line-height: 1; }
+.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; border: 1px solid; white-space: nowrap; }
+.pill.solid { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.pill.okay { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.pill.shaky { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+.pill.none { color: var(--none); border-color: var(--none); background: var(--none-soft); }
+.report ol { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 5px; max-width: 80ch; }
+.foot { margin: 0; font-size: .74rem; color: var(--ink-3); max-width: 100ch; }
+#err { margin: 0; padding: 8px 12px; border-radius: 6px; background: #b3261e; color: #fff; font: 12px var(--font-mono); white-space: pre-wrap; }
+
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>CSP Evaluation Sheet</h1>
+      <p class="sub">Ten small constraint satisfaction problems. Solve each one, answer a quick check, then read how a solver would think about it. None of them is hard: the point is to spot the same three ingredients in ten different disguises.</p>
+    </div>
+    <div class="scorebox" id="scorebox"></div>
+  </header>
+  <div class="layout">
+    <aside class="side">
+      <section class="panel">
+        <h2>Your 10 CSPs</h2>
+        <ul class="csplist" id="csplist"></ul>
+        <ul class="legendrow"><li><i></i>not done yet</li><li><i class="shaky"></i>under 5</li><li><i class="okay"></i>5 to 8</li><li><i class="solid"></i>8 or more</li></ul>
+      </section>
+      <section class="panel">
+        <h2>The 3 ingredients of a CSP</h2>
+        <ul class="ingr">
+          <li><b>Variables</b>: the things you must decide (the colour of each region).</li>
+          <li><b>Domains</b>: the values each variable may take (Red, Blue or Yellow).</li>
+          <li><b>Constraints</b>: rules about which combinations are allowed (neighbours differ).</li>
+          <li>A <b>solution</b> gives every variable a value without breaking any rule.</li>
+        </ul>
+        <details class="gloss">
+          <summary>Words you will meet</summary>
+          <dl>
+            <dt>Unary constraint</dt><dd>Involves one variable ("Physics is not on Monday 9:00"). It just removes values from the domain.</dd>
+            <dt>Binary constraint</dt><dd>Involves two variables ("these regions differ").</dd>
+            <dt>Global / n-ary constraint</dt><dd>Involves many variables at once (all-different, a row that sums to 15).</dd>
+            <dt>Constraint propagation</dt><dd>Using the rules to delete impossible values from domains.</dd>
+            <dt>Backtracking</dt><dd>Assign one variable at a time; when stuck, undo the last choice.</dd>
+            <dt>Local search</dt><dd>Start with a full (wrong) assignment and repair it.</dd>
+          </dl>
+        </details>
+      </section>
+    </aside>
+    <main id="main" aria-live="polite"></main>
+  </div>
+  <p class="foot">Each CSP is worth 10 points: up to 6 for solving it (every hint costs 1 point, showing the solution gives 0 for this part) and up to 4 for the quick check (4 on the first try, 2 on the second, 1 on the third). Progress is saved in this browser only.</p>
+  <pre id="err" hidden></pre>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fmt = (v) => String(Math.round(v * 10) / 10);
+  const errBox = $('err');
+  window.addEventListener('error', (ev) => { errBox.hidden = false; errBox.textContent += (ev.message || 'Script error') + ' (line ' + ev.lineno + ')\n'; });
+
+  // ============================================================ a tiny CSP engine (also used for the hints and for "show solution")
+  // P = { vars: [names], dom: {name: [values]}, cons: [{ vars: [names], ok: (...values) => bool, part?: (valuesOrNull) => bool, label }] }
+  const csp = (vars, dom, cons) => ({ vars, dom, cons });
+  const defined = (a, vs) => vs.every((v) => a[v] !== undefined && a[v] !== null);
+  const vals = (a, c) => c.vars.map((v) => a[v]);
+  // rules that are fully assigned and broken (what the player sees as a clash)
+  const violated = (P, a) => P.cons.filter((c) => defined(a, c.vars) && !c.ok.apply(null, vals(a, c)));
+  // like violated, but a rule with blanks may also be declared impossible by its optional part() test
+  function isDead(P, a, only) {
+    for (const c of P.cons) {
+      if (only && !c.vars.some((v) => only.indexOf(v) >= 0)) continue;
+      const x = vals(a, c);
+      if (x.every((y) => y !== undefined && y !== null)) { if (!c.ok.apply(null, x)) return true; }
+      else if (c.part && !c.part(x)) return true;
+    }
+    return false;
+  }
+  // the values of v that do not break any rule given what is already assigned: this is the variable's current domain
+  const legal = (P, a, v) => P.dom[v].filter((d) => { const b = Object.assign({}, a); b[v] = d; return !isDead(P, b, [v]); });
+  // plain backtracking with "fewest legal values first"; returns a full assignment or null
+  function solve(P, a) {
+    a = Object.assign({}, a);
+    if (isDead(P, a)) return null;
+    let pick = null, opts = null;
+    for (const v of P.vars) {
+      if (a[v] !== undefined && a[v] !== null) continue;
+      const l = legal(P, a, v);
+      if (!l.length) return null;
+      if (!opts || l.length < opts.length) { pick = v; opts = l; }
+    }
+    if (pick === null) return a;
+    for (const d of opts) { const b = Object.assign({}, a); b[pick] = d; const r = solve(P, b); if (r) return r; }
+    return null;
+  }
+  // a hint that points at the variable with the fewest legal values left
+  function hintFor(P, a, nm, fv) {
+    fv = fv || String;
+    const bad = violated(P, a);
+    if (bad.length) return { kind: 'conflict', cons: bad, text: 'A rule is broken: ' + bad[0].label + '. Fix that first.' };
+    if (!solve(P, a)) return { kind: 'dead', text: 'Nothing is broken yet, but your choices cannot be completed: some empty spot would have no legal value left. That is a dead end. Undo one of your recent choices (this is backtracking).' };
+    // fewest legal values first (MRV); ties go to the variable linked to the most other empty spots (degree)
+    const empty = (v) => a[v] === undefined || a[v] === null;
+    const degree = (v) => P.cons.filter((c) => c.vars.indexOf(v) >= 0 && c.vars.some((u) => u !== v && empty(u))).length;
+    let best = null, bl = null, tie = false;
+    P.vars.forEach((v) => {
+      if (!empty(v)) return;
+      const l = legal(P, a, v);
+      if (!bl || l.length < bl.length || (l.length === bl.length && degree(v) > degree(best))) { tie = !!bl && l.length === bl.length; best = v; bl = l; }
+      else if (l.length === bl.length) tie = true;
+    });
+    if (best === null) return { kind: 'done', text: 'Everything is filled in.' };
+    const s = solve(P, a)[best];
+    const text = bl.length === 1 ? nm(best) + ' has only one legal value left: ' + fv(bl[0]) + '. It is forced.'
+      : nm(best) + ' has ' + (tie ? 'as few legal values as any other empty spot, but it is linked to the most of them' : 'the fewest legal values left') + ' (' + bl.length + '): ' + bl.map(fv).join(', ') + '. Start there; ' + fv(s) + ' works.';
+    return { kind: 'place', v: best, legal: bl, val: s, text };
+  }
+  const ne = (x, y, why) => ({ vars: [x, y], ok: (p, q) => p !== q, label: why || (x + ' and ' + y + ' must differ') });
+  function ruleState(r, a) {
+    if (r.cons.some((c) => defined(a, c.vars) && !c.ok.apply(null, vals(a, c)))) return 'bad';
+    if (r.cons.every((c) => defined(a, c.vars))) return 'ok';
+    return 'idle';
+  }
+  function rulesHTML(rules, a) {
+    return '<ol class="rules">' + rules.map((r) => {
+      const s = ruleState(r, a);
+      return '<li class="' + s + '"><span class="ic" aria-hidden="true">' + (s === 'ok' ? '✓' : s === 'bad' ? '✗' : '○') + '</span><span>' + r.text + (r.tag ? ' <em class="tg">' + r.tag + '</em>' : '') +
+        '<span class="sr"> ' + (s === 'ok' ? '(satisfied)' : s === 'bad' ? '(broken)' : '(not decided yet)') + '</span></span></li>';
+    }).join('') + '</ol>';
+  }
+  const padHTML = (digits) => '<div class="pad" role="group" aria-label="Number pad">' + digits.map((d) => '<button type="button" class="padbtn" data-d="' + d + '">' + d + '</button>').join('') +
+    '<button type="button" class="padbtn" data-d="0" aria-label="Clear the cell">⌫</button></div>';
+
+  // ============================================================ the simplified map of Australia (CSP 1 and CSP 9)
+  const AU = {
+    names: { WA: 'Western Australia', NT: 'Northern Territory', SA: 'South Australia', Q: 'Queensland', NSW: 'New South Wales', V: 'Victoria', T: 'Tasmania' },
+    poly: {
+      WA: '0,60 30,30 150,30 150,270 30,270 0,200', NT: '150,30 240,30 240,120 150,120', SA: '150,120 240,120 240,150 300,150 300,270 150,270',
+      Q: '240,30 390,30 390,150 240,150', NSW: '300,150 390,150 390,225 300,225', V: '300,225 390,225 375,270 300,270', T: '325,283 378,283 362,320 338,320'
+    },
+    label: { WA: [75, 150], NT: [195, 75], SA: [225, 200], Q: [315, 90], NSW: [345, 186], V: [342, 250], T: [351, 300] },
+    edges: [['WA', 'NT'], ['WA', 'SA'], ['NT', 'SA'], ['NT', 'Q'], ['SA', 'Q'], ['SA', 'NSW'], ['SA', 'V'], ['Q', 'NSW'], ['NSW', 'V']],
+    gpos: { WA: [30, 100], NT: [88, 38], SA: [104, 108], Q: [172, 46], NSW: [200, 112], V: [158, 166], T: [34, 168] }
+  };
+  AU.regions = Object.keys(AU.poly);
+  AU.nb = {}; AU.regions.forEach((r) => { AU.nb[r] = []; });
+  AU.edges.forEach((e) => { AU.nb[e[0]].push(e[1]); AU.nb[e[1]].push(e[0]); });
+  const COLS = { R: { n: 'Red', v: '--k1', i: '--k1-ink' }, B: { n: 'Blue', v: '--k2', i: '--k2-ink' }, Y: { n: 'Yellow', v: '--k3', i: '--k3-ink' } };
+  function auCSP() {
+    const dom = {}; AU.regions.forEach((r) => { dom[r] = ['R', 'B', 'Y']; });
+    return csp(AU.regions, dom, AU.edges.map((e) => ne(e[0], e[1], e[0] + ' and ' + e[1] + ' touch, so they need different colours')));
+  }
+  function auMap(o) {
+    let s = '<svg class="aumap" viewBox="0 0 400 330" role="group" aria-label="Simplified map of Australia">';
+    AU.regions.forEach((r) => {
+      const c = o.col[r], L = AU.label[r];
+      const fill = c ? 'var(' + COLS[c].v + ')' : 'var(--surface-2)', ink = c ? 'var(' + COLS[c].i + ')' : 'var(--ink)';
+      s += '<g class="rg' + (o.glow === r ? ' glow' : '') + '" data-r="' + r + '" tabindex="0" role="button" aria-label="' + AU.names[r] + ', ' + (c ? COLS[c].n : 'not coloured yet') + '">' +
+        '<polygon points="' + AU.poly[r] + '" style="fill:' + fill + '"/>' +
+        '<text x="' + L[0] + '" y="' + L[1] + '" text-anchor="middle" style="fill:' + ink + ';font-size:15px">' + r + '</text>';
+      if (c) s += '<text x="' + L[0] + '" y="' + (L[1] + 15) + '" text-anchor="middle" style="fill:' + ink + ';font-size:11px;font-weight:500">' + COLS[c].n + '</text>';
+      else if (o.pips) {
+        const dm = o.pips[r] || [];
+        Object.keys(COLS).forEach((k, i) => {
+          const cx = L[0] + (i - 1) * 14, cy = L[1] + 12;
+          s += dm.indexOf(k) >= 0 ? '<circle cx="' + cx + '" cy="' + cy + '" r="5" style="fill:var(' + COLS[k].v + ');stroke:var(--ink);stroke-width:1"/>'
+            : '<circle cx="' + cx + '" cy="' + cy + '" r="4.5" style="fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:2 2"/>';
+        });
+      }
+      s += '</g>';
+    });
+    (o.bad || []).forEach((r) => { s += '<polygon class="badline" points="' + AU.poly[r] + '"/>'; });
+    return s + '</svg>';
+  }
+  function auGraph(o) {
+    let s = '<svg class="augraph" viewBox="0 0 240 200" role="img" aria-label="Constraint graph: one dot per region, one line per shared border">';
+    AU.edges.forEach((e) => {
+      const p = AU.gpos[e[0]], q = AU.gpos[e[1]], bad = o.badEdges && o.badEdges.has(e[0] + '|' + e[1]);
+      s += '<line x1="' + p[0] + '" y1="' + p[1] + '" x2="' + q[0] + '" y2="' + q[1] + '" style="stroke:' + (bad ? 'var(--bad)' : 'var(--ink-3)') + ';stroke-width:' + (bad ? 4 : 2) + '"/>';
+    });
+    AU.regions.forEach((r) => {
+      const c = o.col[r], p = AU.gpos[r];
+      s += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="17" style="fill:' + (c ? 'var(' + COLS[c].v + ')' : 'var(--surface-2)') + ';stroke:var(--ink);stroke-width:2"/>' +
+        '<text x="' + p[0] + '" y="' + (p[1] + 4.5) + '" text-anchor="middle" style="fill:' + (c ? 'var(' + COLS[c].i + ')' : 'var(--ink)') + ';font-size:12px;font-weight:700">' + r + '</text>';
+    });
+    return s + '</svg>';
+  }
+
+  // ============================================================ the ten CSPs
+  // each: id, title, skill (one line for the list), tags, level (1..3), story (html), mount(box, ctl) -> {hint(), reveal(), reset()}, quiz, explain
+  const MODS = [];
+
+  // ------------------------------------------------------------ 1. map colouring
+  MODS.push((function () {
+    const P = auCSP(), NEXT = { undefined: 'R', R: 'B', B: 'Y', Y: undefined };
+    return {
+      id: 'map', title: 'Colour the map of Australia', skill: 'Variables, domains, constraints', tags: ['Binary constraints', 'Graph colouring'], level: 1,
+      story: 'Colour every region of this simplified map of Australia so that regions sharing a border get <b>different</b> colours. You have three colours: Red, Blue and Yellow. Click a region to cycle through them.',
+      mount(box, ctl) {
+        let a = {}, glow = null;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="mapHost"></div><p class="cap">Click (or press Enter on) a region to cycle Red, Blue, Yellow, empty. The map is schematic, not to scale.</p></div>' +
+          '<div class="pane"><div class="graphHost"></div><p class="cap">The constraint graph: one dot per variable, one line per rule. A red line means the two ends clash.</p></div></div>';
+        const mapHost = box.querySelector('.mapHost'), graphHost = box.querySelector('.graphHost');
+        function draw(focusR) {
+          const bad = violated(P, a), badR = new Set(), badE = new Set();
+          bad.forEach((c) => { c.vars.forEach((v) => badR.add(v)); badE.add(c.vars.join('|')); });
+          mapHost.innerHTML = auMap({ col: a, glow, bad: Array.from(badR) });
+          graphHost.innerHTML = auGraph({ col: a, badEdges: badE });
+          if (focusR) { const g = mapHost.querySelector('[data-r="' + focusR + '"]'); if (g) g.focus(); }
+          const n = Object.keys(a).length;
+          if (bad.length) ctl.say('These neighbours share a colour: ' + bad.map((c) => c.vars.join('-')).join(', ') + '.', 'bad');
+          else if (n < 7) ctl.say(n + ' of 7 regions coloured, no clashes so far.', 'info');
+          else ctl.solved();
+        }
+        function click(r, viaKey) { glow = null; const nx = NEXT[a[r]]; if (nx) a[r] = nx; else delete a[r]; draw(viaKey ? r : null); }
+        mapHost.addEventListener('click', (e) => { const g = e.target.closest('[data-r]'); if (g) click(g.dataset.r, false); });
+        mapHost.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { const g = e.target.closest('[data-r]'); if (g) { e.preventDefault(); click(g.dataset.r, true); } } });
+        draw();
+        return {
+          hint() { const t = hintFor(P, a, (v) => AU.names[v], (c) => COLS[c].n); glow = t.kind === 'conflict' ? t.cons[0].vars[0] : (t.v || null); draw(); return t.text; },
+          reveal() { a = solve(P, violated(P, a).length ? {} : a) || solve(P, {}); glow = null; draw(); },
+          reset() { a = {}; glow = null; draw(); }
+        };
+      },
+      quiz: {
+        q: 'Which description of this CSP is correct?',
+        opts: ['7 variables (the regions), each with the domain {Red, Blue, Yellow}, and one rule per shared border: the two regions must differ.',
+          '3 variables (the colours), each with the domain {the 7 regions}, and a rule that each region is used once.',
+          '7 variables, each with the domain {Red, Blue, Yellow}, and a single rule: all 7 regions must have different colours.',
+          '9 variables (the borders), each with the domain {touching, not touching}.'],
+        ans: 0, nudge: 'Ask what you are deciding: you decide a colour for each region.',
+        why: 'What we decide is the colour of each region, so the regions are the variables and the colours are the domain. "All different" would need 7 colours, but we only have 3 and non-touching regions may share a colour.'
+      },
+      explain: {
+        vars: 'The 7 regions: WA, NT, SA, Q, NSW, V, T.',
+        dom: '{Red, Blue, Yellow} for every region.',
+        cons: '9 binary constraints, one per shared border, each saying "these two regions have different colours". Tasmania touches nothing, so it has no constraints.',
+        think: ['Draw the constraint graph (the picture next to the map): a dot per variable and a line per constraint.',
+          'Colour the most connected region first. South Australia touches 5 regions, so whatever colour it gets is removed from all five neighbours, leaving each of them two colours.',
+          'Tasmania has no lines, so it is a separate tiny problem: any colour works.'],
+        take: 'When every constraint involves two variables, a CSP is just a graph: variables are nodes, constraints are edges.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 2. mini sudoku
+  MODS.push((function () {
+    const PUZ = [0, 0, 3, 2, 0, 0, 0, 4, 3, 4, 0, 0, 0, 2, 4, 3], SOL = [4, 1, 3, 2, 2, 3, 1, 4, 3, 4, 2, 1, 1, 2, 4, 3];
+    const nm = (i) => 'R' + (((i / 4) | 0) + 1) + 'C' + ((i % 4) + 1), V = (i) => 'c' + i;
+    const vars = PUZ.map((_, i) => V(i)), dom = {}, cons = [];
+    vars.forEach((v) => { dom[v] = [1, 2, 3, 4]; });
+    for (let i = 0; i < 16; i++) for (let j = i + 1; j < 16; j++) {
+      const ri = (i / 4) | 0, ci = i % 4, rj = (j / 4) | 0, cj = j % 4;
+      if (ri === rj || ci === cj || (((ri / 2) | 0) === ((rj / 2) | 0) && ((ci / 2) | 0) === ((cj / 2) | 0))) cons.push(ne(V(i), V(j), nm(i) + ' and ' + nm(j) + ' share a row, column or box, so they must differ'));
+    }
+    const P = csp(vars, dom, cons);
+    return {
+      id: 'sudoku', title: 'Mini Sudoku 4×4', skill: 'All-different constraints', tags: ['Global constraints', 'Propagation'], level: 2,
+      story: 'Fill the grid with 1 to 4 so that every row, every column and every 2×2 box contains each number exactly once. Click a cell, then a number (or type it). Switch on <b>show possible values</b> to see each empty cell\'s domain.',
+      mount(box, ctl) {
+        let a, sel = null, hl = null, pm = false;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="sgrid" style="--n:4;--cell:clamp(46px,14vw,66px)"></div></div>' +
+          '<div class="pane">' + padHTML([1, 2, 3, 4]) + '<label class="chk"><input type="checkbox" id="pmChk"> Show possible values (each cell\'s domain)</label>' +
+          '<p class="cap">Keyboard: arrow keys move, 1 to 4 type a number, Backspace clears. Grey cells are given and cannot change.</p></div></div>';
+        const grid = box.querySelector('.sgrid');
+        function start() { a = {}; PUZ.forEach((x, i) => { if (x) a[V(i)] = x; }); sel = null; hl = null; }
+        function draw() {
+          const had = grid.contains(document.activeElement);
+          const bad = violated(P, a), badC = new Set();
+          bad.forEach((c) => c.vars.forEach((v) => badC.add(v)));
+          grid.innerHTML = vars.map((v, i) => {
+            const r = (i / 4) | 0, c = i % 4, given = !!PUZ[i], val = a[v];
+            const cls = ['cell', c === 1 ? 'br' : '', r === 1 ? 'bb' : '', given ? 'given' : 'mine', sel === i ? 'sel' : '', badC.has(v) ? 'bad' : '', hl === i ? 'hl' : ''].filter(Boolean).join(' ');
+            let inner = val ? String(val) : '';
+            if (!val && pm) { const lg = legal(P, a, v); inner = '<span class="pm">' + [1, 2, 3, 4].map((d) => '<i' + (lg.indexOf(d) < 0 ? ' style="visibility:hidden"' : '') + '>' + d + '</i>').join('') + '</span>'; }
+            return '<button type="button" class="' + cls + '" data-i="' + i + '" aria-label="' + nm(i) + (val ? ', ' + val : ', empty') + (given ? ', given' : '') + '">' + inner + '</button>';
+          }).join('');
+          if (had && sel !== null) { const b = grid.querySelector('[data-i="' + sel + '"]'); if (b) b.focus(); }
+          const filled = vars.filter((v) => a[v]).length;
+          if (bad.length) ctl.say('Clash: ' + bad[0].label + '.', 'bad');
+          else if (filled < 16) ctl.say((16 - filled) + ' cells left to fill, no clashes so far.', 'info');
+          else ctl.solved();
+        }
+        function put(d) { if (sel === null || PUZ[sel]) return; if (d) a[V(sel)] = d; else delete a[V(sel)]; hl = null; draw(); }
+        grid.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) { sel = +b.dataset.i; hl = null; draw(); const nb = grid.querySelector('[data-i="' + sel + '"]'); if (nb) nb.focus(); } });
+        grid.addEventListener('keydown', (e) => {
+          const b = e.target.closest('[data-i]'); if (!b) return;
+          sel = +b.dataset.i;
+          if (/^[1-4]$/.test(e.key)) { e.preventDefault(); put(+e.key); }
+          else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') { e.preventDefault(); put(0); }
+          else if (e.key.indexOf('Arrow') === 0) {
+            e.preventDefault(); const r = (sel / 4) | 0, c = sel % 4;
+            const nr = Math.max(0, Math.min(3, r + (e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0))), nc = Math.max(0, Math.min(3, c + (e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0)));
+            sel = nr * 4 + nc; draw(); const nb = grid.querySelector('[data-i="' + sel + '"]'); if (nb) nb.focus();
+          }
+        });
+        box.querySelector('.pad').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) put(+b.dataset.d); });
+        box.querySelector('#pmChk').addEventListener('change', (e) => { pm = e.target.checked; draw(); });
+        start(); draw();
+        return {
+          hint() { const t = hintFor(P, a, (v) => nm(+v.slice(1))); const v = t.v || (t.cons && t.cons[0].vars[0]); if (v) { hl = +v.slice(1); sel = hl; } draw(); return t.text; },
+          reveal() { a = {}; SOL.forEach((x, i) => { a[V(i)] = x; }); sel = null; hl = null; draw(); },
+          reset() { start(); draw(); }
+        };
+      },
+      quiz: {
+        q: 'How many "all different" rules does a 4×4 Sudoku have?',
+        opts: ['4', '8', '12', '16'], ans: 2, nudge: 'Count the rows, the columns and the boxes.',
+        why: '4 rows + 4 columns + 4 boxes = 12. Each rule says: these 4 cells must hold 4 different numbers.'
+      },
+      explain: {
+        vars: 'The 16 cells. Eight are given, so eight are really unknown.',
+        dom: '{1, 2, 3, 4}. The givens shrink the domains of cells in the same row, column or box: that is what the small numbers show.',
+        cons: '12 all-different constraints (4 rows, 4 columns, 4 boxes). All-different is a global constraint: it covers several variables at once. It can also be written as pairwise "not equal" rules; every cell has 7 peers.',
+        think: ['Look for a cell whose domain has just one value left. It is forced, so fill it in.',
+          'Filling a cell removes that number from the domains of its 7 peers. That often creates the next forced cell, a chain reaction called constraint propagation.',
+          'If a cell ever ends up with an empty domain, an earlier choice was wrong and you must back up.'],
+        take: 'Solving is a loop: assign a forced value, shrink the neighbours\' domains, repeat.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 3. four queens
+  MODS.push((function () {
+    const N = 4, vars = ['Q1', 'Q2', 'Q3', 'Q4'], dom = {};
+    vars.forEach((v) => { dom[v] = [1, 2, 3, 4]; });
+    const cons = [];
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) cons.push({ vars: [vars[i], vars[j]], ok: (x, y) => x !== y && Math.abs(x - y) !== j - i, label: 'the queens in columns ' + (i + 1) + ' and ' + (j + 1) + ' attack each other' });
+    const P = csp(vars, dom, cons);
+    return {
+      id: 'queens', title: '4-Queens', skill: 'Choosing the variables', tags: ['Binary constraints', 'Modelling'], level: 2,
+      story: 'Place 4 queens on a 4×4 board so that no two queens attack each other (same row or same diagonal). Each column holds exactly one queen, so for every column you only choose its <b>row</b>. Click a square to put that column\'s queen there; click it again to remove it.',
+      mount(box, ctl) {
+        let a = {}, att = false, hintCol = null, hintRows = null;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="board" style="--n:4;--sq:clamp(56px,17vw,80px)"></div></div>' +
+          '<div class="pane"><label class="chk"><input type="checkbox" id="attChk"> Show attacked squares</label><p class="cap">Red shading marks squares a placed queen attacks. In a column that has no queen yet, the unshaded squares are that variable\'s remaining domain.</p></div></div>';
+        const board = box.querySelector('.board');
+        const attacked = (r, c) => vars.some((v, j) => a[v] != null && j !== c && (a[v] === r + 1 || Math.abs(a[v] - (r + 1)) === Math.abs(j - c)));
+        function draw() {
+          const bad = violated(P, a), badV = new Set();
+          bad.forEach((c) => c.vars.forEach((v) => badV.add(v)));
+          let s = '';
+          for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+            const v = vars[c], q = a[v] === r + 1;
+            const cls = ['sq', (r + c) % 2 ? 'b' : 'a', att && !q && attacked(r, c) ? 'att' : '', hintCol === c && hintRows && hintRows.has(r + 1) ? 'ok' : '', q && badV.has(v) ? 'bad' : ''].filter(Boolean).join(' ');
+            s += '<button type="button" class="' + cls + '" data-r="' + r + '" data-c="' + c + '" aria-label="Row ' + (r + 1) + ', column ' + (c + 1) + (q ? ', queen' : '') + '">' + (q ? '<span class="q">♛&#xFE0E;</span>' : '') + '</button>';
+          }
+          board.innerHTML = s;
+          const n = Object.keys(a).length;
+          if (bad.length) ctl.say('Clash: ' + bad[0].label + '.', 'bad');
+          else if (n < N) ctl.say(n + ' of ' + N + ' queens placed, none attacking.', 'info');
+          else ctl.solved();
+        }
+        board.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-r]'); if (!b) return;
+          const v = vars[+b.dataset.c], row = +b.dataset.r + 1;
+          if (a[v] === row) delete a[v]; else a[v] = row;
+          hintCol = null; draw();
+        });
+        box.querySelector('#attChk').addEventListener('change', (e) => { att = e.target.checked; draw(); });
+        draw();
+        return {
+          hint() {
+            const t = hintFor(P, a, (v) => 'Column ' + v.slice(1), (x) => 'row ' + x);
+            if (t.kind === 'place') { hintCol = +t.v.slice(1) - 1; hintRows = new Set(t.legal); } else hintCol = null;
+            draw(); return t.text;
+          },
+          reveal() { a = solve(P, violated(P, a).length ? {} : a) || solve(P, {}); hintCol = null; draw(); },
+          reset() { a = {}; hintCol = null; draw(); }
+        };
+      },
+      quiz: {
+        q: 'We use one variable per column. What is the domain of each variable?',
+        opts: ['The row number: {1, 2, 3, 4}', 'All 16 squares of the board', '{queen, empty}', '{attacked, safe}'], ans: 0,
+        nudge: 'A column always holds exactly one queen. What is left to decide?',
+        why: 'The column is already settled, so only the row is open. This model builds the "no two queens in a column" rule into the variables and shrinks the search from 1,820 ways of choosing 4 squares to 4⁴ = 256 assignments.'
+      },
+      explain: {
+        vars: 'Q1, Q2, Q3, Q4: the queen in each column.',
+        dom: 'Rows {1, 2, 3, 4}.',
+        cons: '6 binary constraints, one for every pair of queens: not in the same row and not on the same diagonal (the row difference must differ from the column difference). "Same column" is never needed.',
+        think: ['Place a queen in column 1. The squares it attacks leave the domains of the other columns. This is forward checking: switch on "show attacked squares" to watch it.',
+          'If some later column has no safe square left, you are in a dead end. Move the previous queen: that is backtracking.',
+          '4-Queens has exactly 2 solutions, mirror images of each other.'],
+        take: 'Choosing the variables well (one queen per column) builds a rule into the model for free.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 4. cryptarithmetic
+  MODS.push((function () {
+    const L = ['T', 'O', 'G', 'U'], ANS = { T: 2, O: 1, G: 8, U: 0 }, dom = {};
+    L.forEach((l) => { dom[l] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; });
+    const diff = [];
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) diff.push(ne(L[i], L[j], 'different letters need different digits'));
+    const lead = ['T', 'G', 'O'].map((l) => ({ vars: [l], ok: (x) => x !== 0, label: l + ' starts a number, so it cannot be 0' }));
+    const sum = { vars: ['T', 'O', 'G', 'U'], ok: (T, O, G, U) => (10 * T + O) + (10 * G + O) === 100 * O + 10 * U + T, label: 'TO + GO must equal OUT' };
+    const rules = [{ text: 'Different letters stand for different digits.', tag: 'all-different', cons: diff }, { text: 'A number cannot start with 0 (T, G and O are not 0).', tag: 'unary', cons: lead },
+      { text: 'TO + GO = OUT, read as numbers.', tag: 'arithmetic', cons: [sum] }];
+    const P = csp(L, dom, diff.concat(lead, [sum]));
+    const STEPS = [
+      ['O', 'Look at the leftmost column. OUT has three digits but TO and GO only two, so O can only be a carry. Two numbers below 100 add up to less than 200, so the carry is 1. Set O = 1.'],
+      ['T', 'Units column: O + O = 1 + 1 = 2, and that digit is T. Set T = 2.'],
+      ['G', 'Tens column: T + G = 2 + G must reach 10 or more to carry 1 into the hundreds (that is O). So G is 8 or 9. G = 9 would make U = 1, which clashes with O. Set G = 8.'],
+      ['U', 'Tens column again: 2 + 8 = 10, so write 0 and carry 1. Set U = 0.']
+    ];
+    return {
+      id: 'crypt', title: 'Letter arithmetic', skill: 'Arithmetic constraints', tags: ['Arithmetic', 'Unary + global'], level: 2,
+      story: 'Every letter stands for a different digit from 0 to 9, and a number never starts with 0. Find digits that make <b>TO + GO = OUT</b> true. Pick a digit for each letter below and watch the sum update.',
+      mount(box, ctl) {
+        let a = {};
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><pre class="eq" aria-label="T O plus G O equals O U T">  T O\n+ G O\n-----\nO U T</pre><p class="live" aria-live="off"></p>' +
+          '<div class="lsels">' + L.map((l) => '<label class="lsel">' + l + ' =<select class="sel" id="cr-' + l + '"><option value="">?</option>' + dom[l].map((d) => '<option value="' + d + '">' + d + '</option>').join('') + '</select></label>').join('') + '</div></div>' +
+          '<div class="pane"><h5>Rules</h5><div class="rulesHost"></div></div></div>';
+        const live = box.querySelector('.live'), rh = box.querySelector('.rulesHost');
+        const dg = (l) => (a[l] == null ? '?' : String(a[l]));
+        function draw() {
+          live.textContent = dg('T') + dg('O') + ' + ' + dg('G') + dg('O') + ' = ' + dg('O') + dg('U') + dg('T');
+          rh.innerHTML = rulesHTML(rules, a);
+          L.forEach((l) => box.querySelector('#cr-' + l).classList.remove('hl'));
+          const n = Object.keys(a).length, bad = violated(P, a);
+          if (bad.length) ctl.say('Not yet: ' + bad[0].label + '.', 'bad');
+          else if (n < 4) ctl.say(n + ' of 4 letters set.', 'info');
+          else ctl.solved();
+        }
+        L.forEach((l) => box.querySelector('#cr-' + l).addEventListener('change', (e) => { if (e.target.value === '') delete a[l]; else a[l] = +e.target.value; draw(); }));
+        const setSel = () => L.forEach((l) => { box.querySelector('#cr-' + l).value = a[l] == null ? '' : String(a[l]); });
+        draw();
+        return {
+          hint() { const s = STEPS.find((x) => a[x[0]] !== ANS[x[0]]); if (!s) return null; box.querySelector('#cr-' + s[0]).classList.add('hl'); return s[1]; },
+          reveal() { a = Object.assign({}, ANS); setSel(); draw(); },
+          reset() { a = {}; setSel(); draw(); }
+        };
+      },
+      quiz: {
+        q: 'Which of these is NOT a constraint of this puzzle?',
+        opts: ['Different letters stand for different digits', 'A number cannot start with 0', 'TO + GO must equal OUT', 'Every digit from 0 to 9 must be used'], ans: 3,
+        nudge: 'There are only four letters. How many digits can they use?',
+        why: 'With only 4 letters, at most 4 of the 10 digits are used. The other three are real constraints.'
+      },
+      explain: {
+        vars: 'The four letters T, O, G, U.',
+        dom: 'The digits 0 to 9 for each letter.',
+        cons: 'An all-different rule on the letters; unary rules "T, G, O are not 0" (leading digits); and the sum TO + GO = OUT, which involves all four letters.',
+        think: ['Leftmost column: OUT has three digits but TO and GO have two, so O is a carry. Two numbers below 100 add up to less than 200, so O = 1.',
+          'Units column: O + O = 2 ends in T, so T = 2.',
+          'Tens column: 2 + G must carry into the hundreds, so G is 8 or 9. G = 9 would give U = 1, but O is already 1. So G = 8 and U = 0.',
+          'No guessing was needed: reasoning about the constraint shrank each domain to a single value.'],
+        take: 'Arithmetic constraints can be read column by column. Carries narrow the domains a lot.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 5. exam timetable
+  MODS.push((function () {
+    const EX = ['Maths', 'Physics', 'Chemistry', 'Biology', 'History'], SL = ['Mon 9:00', 'Mon 14:00', 'Tue 9:00'], dom = {};
+    EX.forEach((e) => { dom[e] = [1, 2, 3]; });
+    const sh = (x, y) => ne(x, y, x + ' and ' + y + ' share students, so they cannot be at the same time');
+    const rules = [
+      { text: 'Maths and Physics share students: different slots.', tag: 'binary', cons: [sh('Maths', 'Physics')] },
+      { text: 'Maths and Chemistry share students: different slots.', tag: 'binary', cons: [sh('Maths', 'Chemistry')] },
+      { text: 'Physics and Chemistry share students: different slots.', tag: 'binary', cons: [sh('Physics', 'Chemistry')] },
+      { text: 'Chemistry and Biology share students: different slots.', tag: 'binary', cons: [sh('Chemistry', 'Biology')] },
+      { text: 'Biology and History share students: different slots.', tag: 'binary', cons: [sh('Biology', 'History')] },
+      { text: 'Chemistry must be earlier than Biology (lab set-up).', tag: 'binary', cons: [{ vars: ['Chemistry', 'Biology'], ok: (c, b) => c < b, label: 'Chemistry must be earlier than Biology' }] },
+      { text: 'Physics cannot be on Monday 9:00 (lab not ready).', tag: 'unary', cons: [{ vars: ['Physics'], ok: (p) => p !== 1, label: 'Physics cannot be on Monday 9:00' }] }
+    ];
+    const P = csp(EX, dom, rules.reduce((acc, r) => acc.concat(r.cons), []));
+    return {
+      id: 'timetable', title: 'Exam timetable', skill: 'Unary and binary constraints', tags: ['Unary', 'Binary', 'Scheduling'], level: 2,
+      story: 'A school must put 5 exams into 3 time slots. Pick a slot for every exam so that all the rules on the right hold. Many timetables work; any valid one is a solution.',
+      mount(box, ctl) {
+        let a = {}, hl = null;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="tablewrap"><table class="choice"><thead><tr><th>Exam</th><th>Time slot</th></tr></thead><tbody>' +
+          EX.map((e) => '<tr><td><b>' + e + '</b></td><td><div class="slotrow" data-e="' + e + '">' + SL.map((s, i) => '<button type="button" class="slot" data-s="' + (i + 1) + '" aria-pressed="false">' + s + '</button>').join('') + '</div></td></tr>').join('') +
+          '</tbody></table></div></div><div class="pane"><h5>Rules</h5><div class="rulesHost"></div></div></div>';
+        const rh = box.querySelector('.rulesHost');
+        function draw() {
+          box.querySelectorAll('.slotrow').forEach((row) => row.querySelectorAll('.slot').forEach((b) => {
+            b.setAttribute('aria-pressed', String(a[row.dataset.e] === +b.dataset.s));
+            b.classList.toggle('hl', hl !== null && hl.e === row.dataset.e && hl.rows.indexOf(+b.dataset.s) >= 0);
+          }));
+          rh.innerHTML = rulesHTML(rules, a);
+          const n = Object.keys(a).length, bad = violated(P, a);
+          if (bad.length) ctl.say('Broken: ' + bad[0].label + '.', 'bad');
+          else if (n < 5) ctl.say(n + ' of 5 exams scheduled, no rule broken so far.', 'info');
+          else ctl.solved();
+        }
+        box.addEventListener('click', (e) => {
+          const b = e.target.closest('.slot'); if (!b) return;
+          const ex = b.closest('.slotrow').dataset.e, s = +b.dataset.s;
+          if (a[ex] === s) delete a[ex]; else a[ex] = s;
+          hl = null; draw();
+        });
+        draw();
+        return {
+          hint() { const t = hintFor(P, a, (v) => v, (x) => SL[x - 1]); hl = t.kind === 'place' ? { e: t.v, rows: t.legal } : null; draw(); return t.text; },
+          reveal() { a = solve(P, violated(P, a).length ? {} : a) || solve(P, {}); hl = null; draw(); },
+          reset() { a = {}; hl = null; draw(); }
+        };
+      },
+      quiz: {
+        q: '"Physics cannot be on Monday 9:00" involves only one variable. What kind of constraint is it?',
+        opts: ['Binary', 'Unary', 'Global (all-different)', 'A soft preference'], ans: 1, nudge: 'Count the variables it mentions.',
+        why: 'A unary constraint restricts a single variable, so it simply deletes a value from that variable\'s domain before any search starts (this is called node consistency).'
+      },
+      explain: {
+        vars: 'The 5 exams: Maths, Physics, Chemistry, Biology, History.',
+        dom: '3 time slots {Mon 9:00, Mon 14:00, Tue 9:00}.',
+        cons: 'Five binary "not at the same time" rules (shared students), one binary ordering rule (Chemistry before Biology) and one unary rule (Physics not on Monday 9:00).',
+        think: ['This is map colouring in disguise: exams are regions, slots are colours, shared students are shared borders. Maths, Physics and Chemistry all clash, so they use all three slots.',
+          'Apply the unary rule first: delete Mon 9:00 from Physics\'s domain.',
+          'The ordering rule is still binary, but it compares two slots (earlier or later) instead of only asking for "different".'],
+        take: 'Real scheduling problems are CSPs. Spot the variables, domains and constraints and the same solvers apply.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 6. pets logic puzzle
+  MODS.push((function () {
+    const PEOPLE = ['Ana', 'Ben', 'Cara'], PETS = ['cat', 'dog', 'fish'], COL3 = ['red', 'blue', 'green'];
+    const pv = PEOPLE.map((p) => 'pet:' + p), cv = PEOPLE.map((p) => 'col:' + p), vars = pv.concat(cv), dom = {};
+    pv.forEach((v) => { dom[v] = PETS; }); cv.forEach((v) => { dom[v] = COL3; });
+    const alld = (vs, what) => { const o = []; for (let i = 0; i < vs.length; i++) for (let j = i + 1; j < vs.length; j++) o.push(ne(vs[i], vs[j], 'two people cannot have the same ' + what)); return o; };
+    const rules = [
+      { text: 'Everyone has a different pet.', tag: 'all-different', cons: alld(pv, 'pet') },
+      { text: 'Everyone wears a different colour.', tag: 'all-different', cons: alld(cv, 'colour') },
+      { text: '1. Cara wears green.', tag: 'unary', cons: [{ vars: ['col:Cara'], ok: (c) => c === 'green', label: 'Cara wears green' }] },
+      { text: '2. The fish owner wears blue.', tag: 'binary', cons: PEOPLE.map((p) => ({ vars: ['pet:' + p, 'col:' + p], ok: (pt, c) => pt !== 'fish' || c === 'blue', label: 'the fish owner wears blue (' + p + ')' })) },
+      { text: '3. Ana does not own the cat.', tag: 'unary', cons: [{ vars: ['pet:Ana'], ok: (pt) => pt !== 'cat', label: 'Ana does not own the cat' }] },
+      { text: '4. The cat owner wears red.', tag: 'binary', cons: PEOPLE.map((p) => ({ vars: ['pet:' + p, 'col:' + p], ok: (pt, c) => pt !== 'cat' || c === 'red', label: 'the cat owner wears red (' + p + ')' })) }
+    ];
+    const P = csp(vars, dom, rules.reduce((acc, r) => acc.concat(r.cons), []));
+    const nm = (v) => { const p = v.slice(4); return v.indexOf('pet') === 0 ? p + '\'s pet' : p + '\'s colour'; };
+    return {
+      id: 'pets', title: 'Who owns which pet?', skill: 'Constraint propagation', tags: ['Logic puzzle', 'Propagation'], level: 2,
+      story: 'Ana, Ben and Cara each own a different pet (cat, dog, fish) and each wears a different colour (red, blue, green). Use the clues to fill in the table. You never need to guess: every clue removes options.',
+      mount(box, ctl) {
+        let a = {}, hl = null;
+        const sel = (v, opts) => '<select class="sel" id="p-' + v.replace(':', '-') + '"><option value="">?</option>' + opts.map((o) => '<option value="' + o + '">' + o + '</option>').join('') + '</select>';
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="tablewrap"><table class="choice"><thead><tr><th>Person</th><th>Pet</th><th>Colour</th></tr></thead><tbody>' +
+          PEOPLE.map((p) => '<tr><td><b>' + p + '</b></td><td>' + sel('pet:' + p, PETS) + '</td><td>' + sel('col:' + p, COL3) + '</td></tr>').join('') + '</tbody></table></div></div>' +
+          '<div class="pane"><h5>Clues</h5><div class="rulesHost"></div></div></div>';
+        const rh = box.querySelector('.rulesHost'), sid = (v) => box.querySelector('#p-' + v.replace(':', '-'));
+        function draw() {
+          vars.forEach((v) => sid(v).classList.toggle('hl', hl === v));
+          rh.innerHTML = rulesHTML(rules, a);
+          const n = Object.keys(a).length, bad = violated(P, a);
+          if (bad.length) ctl.say('Broken: ' + bad[0].label + '.', 'bad');
+          else if (n < 6) ctl.say(n + ' of 6 boxes filled, no clue broken so far.', 'info');
+          else ctl.solved();
+        }
+        vars.forEach((v) => sid(v).addEventListener('change', (e) => { if (e.target.value === '') delete a[v]; else a[v] = e.target.value; hl = null; draw(); }));
+        const setSel = () => vars.forEach((v) => { sid(v).value = a[v] == null ? '' : a[v]; });
+        draw();
+        return {
+          hint() { const t = hintFor(P, a, nm); hl = t.kind === 'place' ? t.v : (t.kind === 'conflict' ? t.cons[0].vars[0] : null); draw(); return t.text; },
+          reveal() { a = solve(P, violated(P, a).length ? {} : a) || solve(P, {}); hl = null; setSel(); draw(); },
+          reset() { a = {}; hl = null; setSel(); draw(); }
+        };
+      },
+      quiz: {
+        q: 'After clue 1 ("Cara wears green"), what can you delete from Ana\'s and Ben\'s colour options?',
+        opts: ['Green', 'Red', 'Blue', 'Nothing yet'], ans: 0, nudge: 'Everyone wears a different colour.',
+        why: 'Everyone wears a different colour, so once Cara has green nobody else can. That is propagation through the all-different rule.'
+      },
+      explain: {
+        vars: '6 variables: each person\'s pet and each person\'s colour.',
+        dom: 'Pets {cat, dog, fish}; colours {red, blue, green}.',
+        cons: 'Two all-different rules (pets, colours) plus the four clues. "Cara wears green" is unary; "the fish owner wears blue" links a person\'s pet to their colour (binary).',
+        think: ['Clue 1 fixes Cara\'s colour, and all-different then removes green from Ana and Ben.',
+          'Cara is green, so she cannot be the fish owner (blue) or the cat owner (red). Cara has the dog.',
+          'Ana does not own the cat, so Ben does, and Ben wears red. Ana is left with the fish and blue.',
+          'Every step deleted values from domains until one value was left: constraint propagation, no trial and error.'],
+        take: 'For easy puzzles propagation alone solves the CSP. Harder ones need propagation plus search.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 7. magic square
+  MODS.push((function () {
+    const GIV = { 0: 2, 1: 7, 4: 5 }, SOL = [2, 7, 6, 9, 5, 1, 4, 3, 8];
+    const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+    const LN = ['Row 1', 'Row 2', 'Row 3', 'Column 1', 'Column 2', 'Column 3', 'the diagonal from top-left', 'the diagonal from top-right'];
+    const V = (i) => 'c' + i, nm = (i) => 'R' + (((i / 3) | 0) + 1) + 'C' + ((i % 3) + 1);
+    const vars = SOL.map((_, i) => V(i)), dom = {}, cons = [];
+    vars.forEach((v) => { dom[v] = [1, 2, 3, 4, 5, 6, 7, 8, 9]; });
+    for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) cons.push(ne(V(i), V(j), nm(i) + ' and ' + nm(j) + ' hold the same number'));
+    LINES.forEach((ln, k) => cons.push({
+      vars: ln.map(V), label: LN[k] + ' must add up to 15', ok: (x, y, z) => x + y + z === 15,
+      part: (x) => { const known = x.filter((q) => q != null), k2 = x.length - known.length, need = 15 - known.reduce((s, q) => s + q, 0); return need >= k2 * (k2 + 1) / 2 && need <= k2 * (19 - k2) / 2; }
+    }));
+    const P = csp(vars, dom, cons);
+    return {
+      id: 'magic', title: 'Magic square 3×3', skill: 'Sum constraints (n-ary)', tags: ['Global constraints', 'Arithmetic'], level: 2,
+      story: 'Fill the 3×3 grid with the numbers 1 to 9, each used once, so that every row, every column and both diagonals add up to <b>15</b>. A few numbers are given. The small boxes show each line\'s total.',
+      mount(box, ctl) {
+        let a, sel = null, hl = null;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="mgrid" style="--cell:clamp(46px,13.5vw,66px)"></div></div><div class="pane">' + padHTML([1, 2, 3, 4, 5, 6, 7, 8, 9]) +
+          '<p class="cap">Greyed numbers on the pad are already placed (each number is used once). Boxes show a line\'s total once it is full: green for 15, red otherwise. The two corner boxes at the bottom are the diagonals (the arrow shows which way each runs).</p></div></div>';
+        const grid = box.querySelector('.mgrid');
+        const start = () => { a = {}; Object.keys(GIV).forEach((i) => { a[V(i)] = GIV[i]; }); sel = null; hl = null; };
+        function badge(k, arrow) {
+          const x = LINES[k].map((i) => a[V(i)]), full = x.every((q) => q != null), s = x.reduce((t, q) => t + (q || 0), 0);
+          return '<div class="sumb ' + (full ? (s === 15 ? 'ok' : 'bad') : '') + '" title="' + LN[k] + '" aria-label="' + LN[k] + ' total' + (full ? ' ' + s : ', needs 15') + '">' +
+            (full ? '<span>' + s + (arrow ? '<small>' + arrow + '</small>' : '') + '</span>' : '<span>15<small>' + (arrow || 'needed') + '</small></span>') + '</div>';
+        }
+        function cell(i) {
+          const v = V(i), given = GIV[i] !== undefined, val = a[v];
+          const cls = ['cell', given ? 'given' : 'mine', sel === i ? 'sel' : '', badC.has(v) ? 'bad' : '', hl === i ? 'hl' : ''].filter(Boolean).join(' ');
+          return '<button type="button" class="' + cls + '" data-i="' + i + '" aria-label="' + nm(i) + (val ? ', ' + val : ', empty') + (given ? ', given' : '') + '">' + (val || '') + '</button>';
+        }
+        let badC = new Set();
+        function draw() {
+          const had = grid.contains(document.activeElement);
+          const bad = violated(P, a); badC = new Set(); bad.forEach((c) => c.vars.forEach((v) => badC.add(v)));
+          let s = '';
+          for (let r = 0; r < 3; r++) s += '<div></div>' + cell(r * 3) + cell(r * 3 + 1) + cell(r * 3 + 2) + badge(r);
+          s += badge(7, '↗ diag') + badge(3) + badge(4) + badge(5) + badge(6, '↖ diag');
+          grid.innerHTML = s;
+          const used = new Set(vars.map((v) => a[v]).filter(Boolean));
+          box.querySelectorAll('.padbtn').forEach((b) => b.classList.toggle('used', used.has(+b.dataset.d)));
+          if (had && sel !== null) { const b = grid.querySelector('[data-i="' + sel + '"]'); if (b) b.focus(); }
+          const n = vars.filter((v) => a[v]).length;
+          if (bad.length) ctl.say('Clash: ' + bad[0].label + '.', 'bad');
+          else if (n < 9) ctl.say((9 - n) + ' cells left, nothing broken so far.', 'info');
+          else ctl.solved();
+        }
+        function put(d) { if (sel === null || GIV[sel] !== undefined) return; if (d) a[V(sel)] = d; else delete a[V(sel)]; hl = null; draw(); }
+        grid.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) { sel = +b.dataset.i; hl = null; draw(); const nb = grid.querySelector('[data-i="' + sel + '"]'); if (nb) nb.focus(); } });
+        grid.addEventListener('keydown', (e) => {
+          const b = e.target.closest('[data-i]'); if (!b) return;
+          sel = +b.dataset.i;
+          if (/^[1-9]$/.test(e.key)) { e.preventDefault(); put(+e.key); }
+          else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') { e.preventDefault(); put(0); }
+          else if (e.key.indexOf('Arrow') === 0) {
+            e.preventDefault(); const r = (sel / 3) | 0, c = sel % 3;
+            const nr = Math.max(0, Math.min(2, r + (e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0))), nc = Math.max(0, Math.min(2, c + (e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0)));
+            sel = nr * 3 + nc; draw(); const nb = grid.querySelector('[data-i="' + sel + '"]'); if (nb) nb.focus();
+          }
+        });
+        box.querySelector('.pad').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) put(+b.dataset.d); });
+        start(); draw();
+        return {
+          hint() {
+            const t = hintFor(P, a, (v) => nm(+v.slice(1)));
+            const v = t.v || (t.cons && t.cons[0].vars[0]); if (v) { hl = +v.slice(1); sel = hl; }
+            draw();
+            return t.kind === 'place' && t.legal.length === 1 ? t.text + ' (Its row, column or diagonal has only one blank, so the number must make the total 15.)' : t.text;
+          },
+          reveal() { a = {}; SOL.forEach((x, i) => { a[V(i)] = x; }); sel = null; hl = null; draw(); },
+          reset() { start(); draw(); }
+        };
+      },
+      quiz: {
+        q: 'How many "must add up to 15" constraints does a 3×3 magic square have?',
+        opts: ['6', '8', '9', '3'], ans: 1, nudge: 'Rows, columns and... what else?',
+        why: '3 rows + 3 columns + 2 diagonals = 8. Each one involves three cells at once, so these are not pairwise rules.'
+      },
+      explain: {
+        vars: 'The 9 cells.',
+        dom: '{1, ..., 9}, and each number is used once.',
+        cons: 'One all-different constraint on all 9 cells, plus 8 sum constraints. Each sum constraint involves three variables at the same time: constraints do not have to be about pairs.',
+        think: ['Find a line with only one empty cell. Its value is forced: 15 minus the other two. Row 1 has 2 and 7, so its last cell is 15 - 9 = 6.',
+          'Every number you place can turn another line into a "one blank left" line.',
+          'Because every number is used once, a placed number also disappears from all the other domains.'],
+        take: 'A constraint can involve any number of variables (n-ary). When all but one of its variables are known, the last one is forced.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 8. arc consistency
+  MODS.push((function () {
+    const D0 = { X: [1, 2, 3, 4], Y: [1, 2, 3, 4], Z: [1, 2, 3] }, VARS = ['X', 'Y', 'Z'];
+    return {
+      id: 'ac3', title: 'Arc consistency', skill: 'Support and pruning (AC-3)', tags: ['Propagation', 'AC-3'], level: 3,
+      story: 'Three variables with the rules <b>X &lt; Y</b> and <b>Y &lt; Z</b>. The boxes list each variable\'s remaining values. A value is <b>supported</b> if its neighbour still has some value that makes the rule true. Click every value that has <b>no support</b> to delete it. Deleting a value that still has support counts as a mistake. Keep going until nothing more can be deleted.',
+      mount(box, ctl) {
+        let dom, log, hl = null, shake = null;
+        const start = () => { dom = { X: D0.X.slice(), Y: D0.Y.slice(), Z: D0.Z.slice() }; log = []; hl = null; shake = null; };
+        // does value n of variable v have a partner in every neighbour's current domain?
+        function support(v, n) {
+          if (v === 'X') { const y = dom.Y.filter((q) => n < q); return y.length ? { ok: true, why: 'Y = ' + y[0] + ' still works (' + n + ' is smaller than ' + y[0] + ')' } : { ok: false, why: 'no value left in Y is bigger than ' + n, nb: 'Y' }; }
+          if (v === 'Z') { const y = dom.Y.filter((q) => q < n); return y.length ? { ok: true, why: 'Y = ' + y[0] + ' still works (' + y[0] + ' is smaller than ' + n + ')' } : { ok: false, why: 'no value left in Y is smaller than ' + n, nb: 'Y' }; }
+          const x = dom.X.filter((q) => q < n), z = dom.Z.filter((q) => n < q);
+          if (!x.length) return { ok: false, why: 'no value left in X is smaller than ' + n, nb: 'X' };
+          if (!z.length) return { ok: false, why: 'no value left in Z is bigger than ' + n, nb: 'Z' };
+          return { ok: true, why: 'X = ' + x[0] + ' and Z = ' + z[0] + ' both still work' };
+        }
+        const firstBad = () => { for (const v of VARS) for (const n of dom[v]) if (!support(v, n).ok) return { v, n, s: support(v, n) }; return null; };
+        function draw() {
+          let s = '<div class="stage-ac">';
+          VARS.forEach((v, i) => {
+            s += '<div class="acrow"><span class="vname">' + v + '</span><div class="chips">' + D0[v].map((n) => {
+              const gone = dom[v].indexOf(n) < 0;
+              return '<button type="button" class="chip' + (gone ? ' gone' : '') + (hl && hl.v === v && hl.n === n ? ' hl' : '') + (shake && shake.v === v && shake.n === n ? ' shake' : '') + '" data-v="' + v + '" data-n="' + n + '"' + (gone ? ' aria-disabled="true" aria-label="' + v + ' = ' + n + ', deleted"' : ' aria-label="' + v + ' = ' + n + '"') + '>' + n + '</button>';
+            }).join('') + '</div></div>' + (i === 0 ? '<div class="acrule">X &lt; Y</div>' : i === 1 ? '<div class="acrule">Y &lt; Z</div>' : '');
+          });
+          s += '</div><h5>What you deleted</h5>' + (log.length ? '<ol class="log">' + log.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ol>' : '<p class="cap">Nothing yet.</p>');
+          box.querySelector('.acHost').innerHTML = s;
+          shake = null;
+        }
+        function check() {
+          const fb = firstBad();
+          if (!fb) ctl.solved();
+        }
+        box.innerHTML = '<div class="acHost"></div>';
+        box.addEventListener('click', (e) => {
+          const b = e.target.closest('.chip'); if (!b || b.classList.contains('gone')) return;
+          const v = b.dataset.v, n = +b.dataset.n, s = support(v, n);
+          hl = null;
+          if (s.ok) { shake = { v, n }; ctl.wrong(0.5); draw(); ctl.say('Keep ' + v + ' = ' + n + ': ' + s.why + '. It has support.', 'bad'); return; }
+          dom[v] = dom[v].filter((q) => q !== n); log.push('Deleted ' + v + ' = ' + n + ': ' + s.why + '.');
+          draw();
+          const fb = firstBad();
+          if (fb) ctl.say('Deleted ' + v + ' = ' + n + ' (' + s.why + '). Deleting it may have taken away someone else\'s support: check the other values again.', 'ok');
+          else { ctl.say('Deleted ' + v + ' = ' + n + '. Nothing else can go.', 'ok'); ctl.solved(); }
+        });
+        start(); draw(); ctl.say('Look for a value with no partner in its neighbour. Start with the ends of the ranges.', 'info');
+        return {
+          hint() {
+            const fb = firstBad(); if (!fb) return null;
+            hl = { v: fb.v, n: fb.n }; draw();
+            return 'Check ' + fb.v + ' = ' + fb.n + ': does ' + fb.s.nb + ' still have a value that makes the rule true with it?';
+          },
+          reveal() { start(); let fb; while ((fb = firstBad())) { dom[fb.v] = dom[fb.v].filter((q) => q !== fb.n); log.push('Deleted ' + fb.v + ' = ' + fb.n + ': ' + fb.s.why + '.'); } draw(); check(); },
+          reset() { start(); draw(); ctl.say('Reset. Look for a value with no partner in its neighbour.', 'info'); }
+        };
+      },
+      quiz: {
+        q: 'A value x in X\'s domain is "supported" for the rule X < Y when...',
+        opts: ['some value y in Y\'s domain makes x < y true', 'every value y in Y\'s domain makes x < y true', 'x is the smallest value in X\'s domain', 'Y has already been assigned'], ans: 0,
+        nudge: 'Support means at least one partner exists.',
+        why: 'Support needs just one partner. If the neighbour has at least one value that works with x, x may still be part of a solution. If there is none, x can never be used and can be deleted.'
+      },
+      explain: {
+        vars: 'X, Y and Z.',
+        dom: 'X and Y: {1, 2, 3, 4}. Z: {1, 2, 3}.',
+        cons: 'X < Y and Y < Z, both binary.',
+        think: ['For every arc (A to B), delete the values of A that have no partner in B. Z = 1 goes first because nothing in Y is smaller than 1; X = 4 goes because nothing in Y is bigger.',
+          'A deletion can hurt other variables. Once Y lost 1, the value Z = 2 lost its only partner and had to go too. AC-3 keeps a queue of arcs and puts a variable\'s neighbours back on it whenever that variable\'s domain shrinks.',
+          'At the end every domain has a single value: X = 1, Y = 2, Z = 3. No search was needed.'],
+        take: 'Arc consistency deletes values that can never be part of a solution. Sometimes it solves the CSP outright; otherwise it leaves smaller domains for the search.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 9. MRV + forward checking
+  MODS.push((function () {
+    const P = auCSP(), ORDER = ['R', 'B', 'Y'];
+    return {
+      id: 'mrv', title: 'Which region next?', skill: 'MRV and forward checking', tags: ['Search', 'Heuristics'], level: 3,
+      story: 'A solver colours the map one region at a time. Western Australia is already Red, and <b>forward checking</b> has removed Red from its neighbours. At every step, click the region the solver should colour next. Rule 1, <b>MRV</b>: pick the region with the fewest legal colours left. Rule 2, to break ties, the <b>degree</b> rule: pick the one touching the most uncoloured regions. The dots show each region\'s remaining colours.',
+      mount(box, ctl) {
+        let asg, log, glow = null;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="mapHost"></div></div><div class="pane"><div class="tblHost"></div><h5>Solver log</h5><div class="logHost"></div></div></div>';
+        const mapHost = box.querySelector('.mapHost'), tbl = box.querySelector('.tblHost'), logHost = box.querySelector('.logHost');
+        const start = () => { asg = { WA: 'R' }; log = []; glow = null; };
+        const doms = () => { const d = {}; AU.regions.forEach((r) => { if (!asg[r]) d[r] = ORDER.filter((c) => !AU.nb[r].some((u) => asg[u] === c)); }); return d; };
+        const open = (r) => AU.nb[r].filter((u) => !asg[u]).length;
+        function best() {
+          const d = doms(), un = Object.keys(d); if (!un.length) return null;
+          const mn = Math.min.apply(null, un.map((r) => d[r].length)), mrv = un.filter((r) => d[r].length === mn);
+          const mx = Math.max.apply(null, mrv.map(open)), pick = mrv.filter((r) => open(r) === mx);
+          return { d, mn, mrv, mx, pick };
+        }
+        function assign(r) {
+          const b = best(), before = b.d[r].slice();
+          const choice = ORDER.filter((c) => before.indexOf(c) >= 0).find((c) => solve(P, Object.assign({}, asg, { [r]: c }))) || before[0];
+          const lost = AU.nb[r].filter((u) => !asg[u] && b.d[u].indexOf(choice) >= 0);
+          asg[r] = choice;
+          log.push(r + ' (' + before.length + ' ' + (before.length === 1 ? 'colour' : 'colours') + ', ' + open(r) + ' open neighbours) = ' + COLS[choice].n + (lost.length ? '. Forward checking removes ' + COLS[choice].n + ' from ' + lost.join(', ') : ''));
+          return { choice, lost };
+        }
+        function draw() {
+          const d = doms(), bad = [];
+          mapHost.innerHTML = auMap({ col: asg, pips: d, glow, bad }) + '<p class="cap">Click the region the solver should colour next. The map is schematic.</p>';
+          tbl.innerHTML = '<div class="tablewrap"><table class="mrv"><thead><tr><th>Region</th><th>Colours left</th><th>Uncoloured neighbours</th></tr></thead><tbody>' + AU.regions.map((r) => {
+            if (asg[r]) return '<tr class="done"><td>' + r + '</td><td><span class="dot" style="background:var(' + COLS[asg[r]].v + ')"></span>' + COLS[asg[r]].n + ' (assigned)</td><td>-</td></tr>';
+            return '<tr><td>' + r + '</td><td>' + ORDER.map((c) => '<span class="dot' + (d[r].indexOf(c) < 0 ? ' off' : '') + '" style="background:var(' + COLS[c].v + ')" title="' + COLS[c].n + '"></span>').join('') + ' ' + d[r].length + '</td><td>' + open(r) + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+          logHost.innerHTML = log.length ? '<ol class="log">' + log.map((l) => '<li>' + esc(l) + '.</li>').join('') + '</ol>' : '<p class="cap">Your picks appear here.</p>';
+        }
+        function finishCheck() { if (!best()) { draw(); ctl.solved(); return true; } return false; }
+        function pickRegion(r) {
+          glow = null;
+          if (asg[r]) { ctl.say(AU.names[r] + ' is already coloured. Pick an uncoloured region.', 'info'); return; }
+          const b = best();
+          if (b.pick.indexOf(r) >= 0) {
+            const res = assign(r);
+            ctl.say(r + ' = ' + COLS[res.choice].n + '. ' + (res.lost.length ? 'Forward checking removed ' + COLS[res.choice].n + ' from ' + res.lost.join(', ') + '.' : 'No neighbour had to change.') + (best() ? ' Next region?' : ''), 'ok');
+            draw(); finishCheck();
+          } else if (b.d[r].length > b.mn) {
+            ctl.wrong(0.5);
+            ctl.say(r + ' still has ' + b.d[r].length + ' colours, but ' + b.mrv.join(', ') + ' ' + (b.mrv.length > 1 ? 'have' : 'has') + ' only ' + b.mn + '. MRV: choose the region with the fewest legal colours. It is the most likely to run out, so we want to find that out early ("fail first").', 'bad');
+          } else {
+            ctl.wrong(0.5);
+            ctl.say('Tie: ' + b.mrv.join(', ') + ' all have ' + b.mn + ' colours. Break the tie with the degree rule: take the one touching the most uncoloured regions (' + b.pick.join(' or ') + ', with ' + b.mx + ').', 'bad');
+          }
+        }
+        mapHost.addEventListener('click', (e) => { const g = e.target.closest('[data-r]'); if (g) pickRegion(g.dataset.r); });
+        mapHost.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { const g = e.target.closest('[data-r]'); if (g) { e.preventDefault(); pickRegion(g.dataset.r); } } });
+        start(); draw(); ctl.say('Step 1: which region would the solver colour next?', 'info');
+        return {
+          hint() { const b = best(); if (!b) return null; glow = b.pick[0]; draw(); return b.mrv.length > 1 ? b.mrv.join(' and ') + ' tie on ' + b.mn + ' colours; ' + b.pick[0] + ' touches the most uncoloured regions (' + b.mx + ').' : b.mrv[0] + ' has the fewest colours left (' + b.mn + ').'; },
+          reveal() { start(); let b; while ((b = best())) assign(b.pick[0]); draw(); },
+          reset() { start(); draw(); ctl.say('Step 1: which region would the solver colour next?', 'info'); }
+        };
+      },
+      quiz: {
+        q: 'A solver assigns SA = Blue. What does forward checking do next?',
+        opts: ['It removes Blue from the domains of SA\'s uncoloured neighbours', 'It takes the assignment back if it looks risky', 'It chooses the next variable using the degree rule', 'It re-checks every rule of the whole problem from scratch'], ans: 0,
+        nudge: 'Forward checking looks only at the neighbours of the variable that was just assigned.',
+        why: 'After each assignment, forward checking deletes the chosen value from the domains of the uncoloured neighbours. If any of those domains becomes empty, the solver backtracks at once instead of discovering the problem later.'
+      },
+      explain: {
+        vars: '7 regions. WA is already assigned, so 6 are left.',
+        dom: 'The colours still legal for each region, starting from {Red, Blue, Yellow}.',
+        cons: 'Neighbouring regions differ, as in CSP 1.',
+        think: ['MRV ("fail first"): the region with the fewest legal colours is the most likely to run out of options, so deal with it first and find dead ends early.',
+          'Degree (tie-breaker): among regions with equally few colours, take the one that touches the most uncoloured regions, because it limits the others the most. Here SA beat NT.',
+          'Forward checking: whenever a region is coloured, remove that colour from its uncoloured neighbours. An empty list means stop and backtrack immediately.',
+          'After SA was coloured, a chain reaction followed: NT, Q, NSW and V each had exactly one colour left, one after another.'],
+        take: 'Good variable ordering (MRV, then degree) plus forward checking makes backtracking far faster. A third idea, least-constraining value (LCV), says to try first the value that rules out the fewest options for the neighbours.'
+      }
+    };
+  })());
+
+  // ------------------------------------------------------------ 10. min-conflicts local search
+  MODS.push((function () {
+    const N = 6, START = [0, 2, 3, 5, 4, 1], vars = [], dom = {};
+    for (let i = 1; i <= N; i++) { vars.push('Q' + i); dom['Q' + i] = [1, 2, 3, 4, 5, 6]; }
+    const cons = [];
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) cons.push({ vars: [vars[i], vars[j]], ok: (x, y) => x !== y && Math.abs(x - y) !== j - i, label: 'queens ' + (i + 1) + ' and ' + (j + 1) + ' attack each other' });
+    const P = csp(vars, dom, cons);
+    return {
+      id: 'minconf', title: 'Repair the queens', skill: 'Local search (min-conflicts)', tags: ['Local search', 'Heuristics'], level: 3,
+      story: 'Backtracking builds a solution piece by piece. <b>Local search</b> does the opposite: it starts with a complete but wrong assignment and repairs it. All 6 queens are already on the board, one per column, and some attack each other. Click a <b>red</b> queen: every square in its column then shows how many queens would attack it there. Move it to a square with the <b>fewest</b> conflicts. Repeat until there are none.',
+      mount(box, ctl) {
+        let rows, sel = null, moves = 0, hintRows = null;
+        box.innerHTML = '<div class="stagegrid"><div class="pane"><div class="board" style="--n:6;--sq:clamp(40px,11.5vw,58px)"></div></div>' +
+          '<div class="pane"><p class="live" style="letter-spacing:0">Attacking pairs: <b class="pairs"></b><br>Moves: <b class="mv"></b></p><p class="cap">Small numbers appear in the column of the selected queen: the number of queens that would attack that square. Dashed green squares are the best choices.</p></div></div>';
+        const board = box.querySelector('.board');
+        const conf = (c, r) => rows.reduce((n, rr, j) => n + (j !== c && (rr === r || Math.abs(rr - r) === Math.abs(j - c)) ? 1 : 0), 0);
+        const total = () => { let t = 0; for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (rows[i] === rows[j] || Math.abs(rows[i] - rows[j]) === j - i) t++; return t; };
+        const colBest = (c) => { let m = 99; for (let r = 0; r < N; r++) m = Math.min(m, conf(c, r)); return m; };
+        const improving = () => { for (let c = 0; c < N; c++) if (conf(c, rows[c]) > 0 && colBest(c) < conf(c, rows[c])) return true; return false; };
+        function draw() {
+          let s = '';
+          const best = sel === null ? 99 : colBest(sel);
+          for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+            const q = rows[c] === r, bad = q && conf(c, r) > 0, showCnt = sel === c;
+            const cls = ['sq', (r + c) % 2 ? 'b' : 'a', bad ? 'bad' : '', sel === c ? 'colsel' : '', showCnt && conf(c, r) === best && r !== rows[c] ? 'ok' : '', hintRows && sel === c && hintRows.has(r) ? 'ok' : ''].filter(Boolean).join(' ');
+            s += '<button type="button" class="' + cls + '" data-r="' + r + '" data-c="' + c + '" aria-label="Row ' + (r + 1) + ', column ' + (c + 1) + (q ? ', queen' + (bad ? ' under attack' : ', safe') : '') + (showCnt ? ', ' + conf(c, r) + ' conflicts here' : '') + '">' +
+              (q ? '<span class="q">♛&#xFE0E;</span>' : '') + (showCnt ? '<span class="cnt">' + conf(c, r) + '</span>' : '') + '</button>';
+          }
+          board.innerHTML = s;
+          box.querySelector('.pairs').textContent = total(); box.querySelector('.mv').textContent = moves;
+        }
+        function afterMove(msg, kind) {
+          draw();
+          if (total() === 0) { ctl.solved(); return; }
+          if (!improving()) ctl.say(msg + ' Now no single move reduces the conflicts: a local minimum. Local search escapes with a random restart or a sideways move. Try Reset or a move that keeps the same count.', 'bad');
+          else ctl.say(msg, kind);
+        }
+        board.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-r]'); if (!b) return;
+          const r = +b.dataset.r, c = +b.dataset.c; hintRows = null;
+          if (sel === null || sel !== c) {
+            if (rows[c] === r) {
+              if (conf(c, r) === 0) { ctl.say('That queen is safe. Min-conflicts only repairs queens that are under attack (the red ones).', 'info'); return; }
+              sel = c; draw(); ctl.say('Column ' + (c + 1) + ' selected. Choose the square with the smallest number.', 'info');
+            } else ctl.say(sel === null ? 'Click a red queen first.' : 'Click a square in the selected column, or pick another red queen.', 'info');
+            return;
+          }
+          if (r === rows[c]) { sel = null; draw(); ctl.say('Selection cleared.', 'info'); return; }
+          const before = conf(c, rows[c]), after = conf(c, r), mn = colBest(c);
+          rows[c] = r; moves++; sel = null;
+          if (after === mn) afterMove('Good move: column ' + (c + 1) + ' went from ' + before + ' to ' + after + ' conflicts, the lowest possible there.', 'ok');
+          else { ctl.wrong(0.5); afterMove('Column ' + (c + 1) + ' now has ' + after + ' conflicts, but another row would have given ' + mn + '. Min-conflicts always takes the lowest.', 'bad'); }
+        });
+        const start = () => { rows = START.slice(); sel = null; moves = 0; hintRows = null; };
+        start(); draw(); ctl.say('Click a red queen to start.', 'info');
+        return {
+          hint() {
+            let pick = -1, worst = 0;
+            for (let c = 0; c < N; c++) { const k = conf(c, rows[c]); if (k > worst && colBest(c) < k) { worst = k; pick = c; } }
+            if (pick < 0) return 'No single move reduces the conflicts right now. Try Reset.';
+            sel = pick; hintRows = new Set(); for (let r = 0; r < N; r++) if (conf(pick, r) === colBest(pick)) hintRows.add(r);
+            draw();
+            return 'Select the queen in column ' + (pick + 1) + ' (it has ' + worst + ' conflicts). The dashed squares in that column have the fewest (' + colBest(pick) + ').';
+          },
+          reveal() { const s = solve(P, {}); rows = vars.map((v) => s[v] - 1); sel = null; hintRows = null; draw(); },
+          reset() { start(); draw(); ctl.say('Reset to the starting board. Click a red queen.', 'info'); }
+        };
+      },
+      quiz: {
+        q: 'Min-conflicts local search starts from...',
+        opts: ['a complete assignment where every variable has a value, even if some rules are broken', 'an empty assignment that it fills one variable at a time', 'the variable with the smallest domain', 'a known solution that it then tries to improve'], ans: 0,
+        nudge: 'Look at the board you were given at the start.',
+        why: 'Local search works on complete assignments and repairs them: pick a variable in conflict, give it the value with the fewest conflicts, repeat. Backtracking, in contrast, works on partial assignments.'
+      },
+      explain: {
+        vars: 'Q1 to Q6: the row of the queen in each column.',
+        dom: 'Rows {1, ..., 6}.',
+        cons: 'No two queens on the same row or diagonal (15 pairs to check).',
+        think: ['Pick any variable that is in conflict, give it the value that conflicts with the fewest other variables, and repeat. That is the whole algorithm.',
+          'It needs almost no memory and works remarkably well: a classic result is that it solves n-queens for a million queens in around fifty steps on average.',
+          'The weakness: it can get stuck on a plateau or in a local minimum where no single move helps (random restarts and sideways moves help), and it can never prove that a problem has no solution.'],
+        take: 'Backtracking works on partial assignments and is complete. Local search works on complete assignments and is very fast, but gives no guarantee.'
+      }
+    };
+  })());
+
+  // ============================================================ the sheet itself: state, scoring, rendering
+  const KEY = 'csp-eval:v1', LV = ['', 'Warm-up', 'Easy', 'Medium, still friendly'];
+  const S = { view: 'csp', idx: 0, api: null, revealing: false, qtmp: null };
+  let R = {};
+  try { const t = JSON.parse(localStorage.getItem(KEY) || 'null'); if (t && typeof t === 'object') R = t; } catch (e) { R = {}; }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(R)); } catch (e) { /* storage may be unavailable */ } };
+  const solvePts = (m) => { const r = R[m.id]; return r && r.solve === 'solved' ? Math.max(2, 6 - (r.pen || 0)) : 0; };
+  const pts = (m) => solvePts(m) + ((R[m.id] && R[m.id].quiz) || 0);
+  const isSolved = (m) => !!(R[m.id] && R[m.id].solve);
+  const isDone = (m) => isSolved(m) && R[m.id].quiz !== undefined;
+  const totalPts = () => MODS.reduce((t, m) => t + pts(m), 0);
+  const cls = (p) => (p >= 8 ? 'solid' : p >= 5 ? 'okay' : 'shaky');
+
+  function say(text, kind) { const el = $('status'); if (!el) return; el.textContent = text; el.className = 'status' + (kind && kind !== 'info' ? ' ' + kind : ''); }
+
+  function renderScore() {
+    const tot = totalPts(), done = MODS.filter(isDone).length, c = 2 * Math.PI * 26;
+    $('scorebox').innerHTML = '<div class="ring"><svg viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r="26" fill="none" style="stroke:var(--surface-2)" stroke-width="7"/><circle cx="31" cy="31" r="26" fill="none" style="stroke:var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (c * tot / 100) + ' ' + c + '"/></svg><b>' + Math.round(tot) + '</b></div>' +
+      '<div><b>' + done + ' of ' + MODS.length + ' finished</b><small>' + fmt(tot) + ' of 100 points</small>' + (MODS.some(isSolved) ? '<button class="btn" id="repBtn" type="button" style="height:30px;margin-top:6px;font-size:.78rem">See my report</button>' : '') + '</div>';
+    const b = $('repBtn'); if (b) b.addEventListener('click', () => { S.view = 'report'; render(); });
+  }
+  function renderRail() {
+    $('csplist').innerHTML = MODS.map((m, i) => {
+      const p = isSolved(m) ? pts(m) : null;
+      return '<li><button type="button" class="cspitem ' + (p === null ? '' : cls(p)) + '" data-i="' + i + '" aria-label="CSP ' + (i + 1) + ': ' + esc(m.title) + (p === null ? ', not done' : ', ' + fmt(p) + ' points') + '" aria-current="' + (S.view === 'csp' && S.idx === i) + '"><span class="num">' + (i + 1) + '</span><span class="nm"><b>' + esc(m.title) + '</b><small>' + esc(m.skill) + '</small></span><span class="pts">' + (p === null ? '-' : fmt(p) + (isDone(m) ? '' : '+')) + '</span></button></li>';
+    }).join('');
+  }
+  $('csplist').addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) openCsp(+b.dataset.i); });
+
+  function openCsp(i) { S.idx = i; S.view = 'csp'; S.qtmp = null; render(); const m = $('main'); if (m && m.scrollIntoView && window.innerWidth <= 960) m.scrollIntoView({ block: 'start' }); }
+  function refreshAll() { renderAfter(); renderRail(); renderScore(); const m = MODS[S.idx], d = isSolved(m); const h = $('bHint'), sh = $('bShow'); if (h) h.disabled = d; if (sh) sh.disabled = d; }
+
+  function renderCard() {
+    const m = MODS[S.idx], id = m.id;
+    $('main').innerHTML = '<article class="card" aria-labelledby="ctitle"><div class="qmeta"><span class="tag">CSP ' + (S.idx + 1) + ' of ' + MODS.length + '</span>' + m.tags.map((t) => '<span class="tag">' + esc(t) + '</span>').join('') +
+      '<span class="stars" aria-hidden="true">' + [1, 2, 3].map((k) => '<i class="' + (k <= m.level ? '' : 'off') + '">★</i>').join('') + '</span><span>' + LV[m.level] + '</span></div>' +
+      '<h3 id="ctitle">' + esc(m.title) + '</h3><p class="prompt">' + m.story + '</p><div class="stage" id="stage"></div><p class="status" id="status" role="status"></p>' +
+      '<div class="actions"><button class="btn" id="bHint" type="button">Hint (-1 point)</button><button class="btn" id="bShow" type="button">Show solution</button><button class="btn" id="bReset" type="button">Reset</button></div><div id="after"></div></article>';
+    const ctl = {
+      say,
+      wrong(w) { if (isSolved(m)) return; const r = (R[id] = R[id] || {}); r.pen = (r.pen || 0) + (w == null ? 0.5 : w); save(); },
+      solved() { if (S.revealing || isSolved(m)) return; R[id] = Object.assign(R[id] || {}, { solve: 'solved' }); save(); say('Solved! You earned ' + fmt(solvePts(m)) + ' of 6 points for this part. Now the quick check.', 'ok'); refreshAll(); }
+    };
+    S.api = m.mount($('stage'), ctl);
+    if (isSolved(m)) { S.revealing = true; S.api.reveal(); S.revealing = false; say(R[id].solve === 'solved' ? 'You solved this one earlier. Press Reset to play it again (it will not change your score).' : 'You looked at the solution earlier. Press Reset to try it yourself (it will not change your score).', 'info'); }
+    $('bHint').onclick = () => {
+      if (isSolved(m)) return;
+      const t = S.api.hint(); if (!t) return;
+      const r = (R[id] = R[id] || {}); r.pen = (r.pen || 0) + 1; r.hints = (r.hints || 0) + 1; save(); say(t, 'hint');
+    };
+    $('bShow').onclick = () => {
+      if (isSolved(m)) return;
+      S.revealing = true; S.api.reveal(); S.revealing = false;
+      R[id] = Object.assign(R[id] || {}, { solve: 'revealed' }); save();
+      say('Here is one solution. Read through it, then try the quick check.', 'info'); refreshAll();
+    };
+    $('bReset').onclick = () => { S.api.reset(); };
+    refreshAll();
+  }
+
+  function renderAfter() {
+    const m = MODS[S.idx], res = R[m.id], el = $('after'); if (!el) return;
+    if (!res || !res.solve) { el.innerHTML = '<p class="lock">Solve the puzzle (or press Show solution) to unlock the quick check and the explanation.</p>'; return; }
+    const q = m.quiz, fin = res.quiz !== undefined, tmp = S.qtmp && S.qtmp.id === m.id ? S.qtmp : null, wrongs = tmp ? tmp.wrong : [];
+    let h = '<section class="sec" aria-labelledby="qh"><h4 id="qh">Quick check (4 points)</h4><p class="qtext">' + esc(q.q) + '</p><div class="opts">' + q.opts.map((o, i) => {
+      const c = fin ? (i === q.ans ? ' right' : wrongs.indexOf(i) >= 0 ? ' wrong' : '') : (wrongs.indexOf(i) >= 0 ? ' wrong' : '');
+      return '<button type="button" class="opt' + c + '" data-o="' + i + '"' + (fin || wrongs.indexOf(i) >= 0 ? ' disabled' : '') + '><span class="mk" aria-hidden="true"></span><span>' + esc(o) + '</span></button>';
+    }).join('') + '</div>';
+    if (fin) h += '<p class="fb ' + (res.quiz > 0 ? 'ok' : 'bad') + '"><b>' + (res.quiz > 0 ? 'Correct, ' + res.quiz + ' of 4 points.' : 'The answer is highlighted in green, 0 of 4 points.') + '</b> ' + esc(q.why) + '</p>';
+    else if (wrongs.length) h += '<p class="fb bad"><b>Not quite.</b> ' + esc(q.nudge) + ' Try again (the next correct answer scores less).</p>';
+    if (!fin) h += '<button type="button" class="linkbtn" id="qskip">Skip the check and show the explanation</button>';
+    h += '</section>';
+    if (fin) {
+      const e = m.explain;
+      h += '<section class="sec explain"><h4>How it works</h4><div class="vdc"><div><b>Variables</b><p>' + e.vars + '</p></div><div><b>Domains</b><p>' + e.dom + '</p></div><div><b>Constraints</b><p>' + e.cons + '</p></div></div>' +
+        '<h5>How a solver thinks about it</h5><ul>' + e.think.map((t) => '<li>' + t + '</li>').join('') + '</ul><p class="take"><b>Key idea.</b> ' + e.take + '</p></section>' +
+        '<div class="nav">' + (S.idx > 0 ? '<button class="btn" id="nPrev" type="button">Previous CSP</button>' : '<span></span>') +
+        (S.idx < MODS.length - 1 ? '<button class="btn primary" id="nNext" type="button">Next CSP</button>' : '<button class="btn primary" id="nRep" type="button">See my report</button>') + '</div>';
+    }
+    el.innerHTML = h;
+    el.querySelectorAll('.opt').forEach((b) => b.addEventListener('click', () => answer(+b.dataset.o)));
+    const sk = $('qskip'); if (sk) sk.addEventListener('click', () => { res.quiz = 0; res.skipped = true; save(); S.qtmp = null; refreshAll(); });
+    const np = $('nPrev'), nn = $('nNext'), nr = $('nRep');
+    if (np) np.addEventListener('click', () => openCsp(S.idx - 1));
+    if (nn) nn.addEventListener('click', () => openCsp(S.idx + 1));
+    if (nr) nr.addEventListener('click', () => { S.view = 'report'; render(); });
+  }
+  function answer(i) {
+    const m = MODS[S.idx], res = R[m.id], q = m.quiz;
+    const t = S.qtmp && S.qtmp.id === m.id ? S.qtmp : (S.qtmp = { id: m.id, wrong: [] });
+    if (i === q.ans) { res.quiz = [4, 2, 1][t.wrong.length]; res.tries = t.wrong.length + 1; save(); }
+    else { t.wrong.push(i); if (t.wrong.length >= 3) { res.quiz = 0; res.tries = 3; save(); } }
+    if (res.quiz !== undefined) S.qtmp = { id: m.id, wrong: t.wrong };
+    refreshAll();
+  }
+
+  let confirming = false;
+  function renderReport() {
+    const tot = totalPts(), done = MODS.filter(isDone).length;
+    const rows = MODS.map((m, i) => {
+      const r = R[m.id] || {}, p = pts(m), st = isDone(m) ? cls(p) : (isSolved(m) ? cls(p) : 'none');
+      return '<tr><td>' + (i + 1) + '</td><td><button class="linkbtn" type="button" data-go="' + i + '">' + esc(m.title) + '</button><br><small>' + esc(m.skill) + '</small></td><td>' + (r.solve === 'solved' ? fmt(solvePts(m)) + ' / 6' + (r.hints ? ' (' + r.hints + ' hint' + (r.hints > 1 ? 's' : '') + ')' : '') : r.solve === 'revealed' ? '0 / 6 (solution shown)' : '-') + '</td><td>' +
+        (r.quiz !== undefined ? r.quiz + ' / 4' + (r.skipped ? ' (skipped)' : '') : '-') + '</td><td><span class="pill ' + st + '">' + (isSolved(m) ? fmt(p) + ' / 10' : 'not done') + '</span></td></tr>';
+    }).join('');
+    const weak = MODS.filter((m) => isDone(m) && pts(m) < 8);
+    $('main').innerHTML = '<section class="card report"><h3>Your report</h3><div class="bigscore">' + fmt(tot) + ' / 100</div><p class="prompt">' + done + ' of ' + MODS.length + ' CSPs finished.' +
+      (done === MODS.length ? (tot >= 80 ? ' You can recognise variables, domains and constraints in all ten disguises.' : ' You covered everything. Re-open the lower scores below and replay them without hints.') : ' Finish the remaining ones to complete the sheet.') + '</p>' +
+      '<div class="tablewrap"><table><thead><tr><th>#</th><th>CSP</th><th>Solving</th><th>Quick check</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      (weak.length ? '<div class="sec"><h4>Worth a second look</h4><p class="prompt">' + weak.map((m) => '<button class="linkbtn" type="button" data-go="' + MODS.indexOf(m) + '">' + esc(m.title) + '</button>').join(' &middot; ') + '</p></div>' : '') +
+      '<div class="sec"><h4>Cheat sheet: the key idea of each CSP</h4><ol>' + MODS.map((m) => '<li><b>' + esc(m.title) + '.</b> ' + m.explain.take + '</li>').join('') + '</ol></div>' +
+      '<div class="actions"><button class="btn primary" id="rBack" type="button">Back to the CSPs</button><button class="btn" id="rReset" type="button">' + (confirming ? 'Click again to erase all progress' : 'Reset all progress') + '</button></div></section>';
+    $('main').querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => openCsp(+b.dataset.go)));
+    $('rBack').addEventListener('click', () => { const nx = MODS.findIndex((m) => !isDone(m)); openCsp(nx < 0 ? 0 : nx); });
+    $('rReset').addEventListener('click', () => {
+      if (!confirming) { confirming = true; renderReport(); setTimeout(() => { if (confirming) { confirming = false; if (S.view === 'report') renderReport(); } }, 4000); return; }
+      confirming = false; R = {}; save(); S.qtmp = null; S.idx = 0; S.view = 'csp'; render();
+    });
+  }
+
+  function render() { renderRail(); renderScore(); if (S.view === 'report') renderReport(); else renderCard(); }
+  const first = MODS.findIndex((m) => !isDone(m));
+  S.idx = first < 0 ? 0 : first;
+  render();
+})();
+</script>

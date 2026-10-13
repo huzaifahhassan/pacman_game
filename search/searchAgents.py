@@ -417,7 +417,8 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
             here = corner
         if best_tour is None or tour < best_tour:
             best_tour = tour
-    return best_tour
+    return best_tour # so technically for any given state we will get the lowest cost of achieving corners.
+    # then the hurestic for corners will just be lower than that number. 
 
 class AStarCornersAgent(SearchAgent):
     "A SearchAgent for FoodSearchProblem using A* and your foodHeuristic"
@@ -481,6 +482,24 @@ class AStarFoodSearchAgent(SearchAgent):
         self.searchFunction = lambda prob: search.aStarSearch(prob, foodHeuristic)
         self.searchType = FoodSearchProblem
 
+def walkingDistances(source, walls):
+    """
+    How many steps it takes to walk from `source` to every cell it can reach,
+    going around the walls (a breadth-first search on the grid). Returns a
+    dictionary {cell: steps}. Used by foodHeuristic.
+    """
+    distances = {source: 0}
+    queue = util.Queue()
+    queue.push(source)
+    while not queue.isEmpty():
+        x, y = queue.pop()
+        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            neighbour = (x + dx, y + dy)
+            if not walls[neighbour[0]][neighbour[1]] and neighbour not in distances:
+                distances[neighbour] = distances[(x, y)] + 1
+                queue.push(neighbour)
+    return distances
+
 def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     Your heuristic for the FoodSearchProblem goes here.
@@ -511,7 +530,32 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     position, foodGrid = state
     "*** YOUR CODE HERE ***"
-    return 0
+
+    food = foodGrid.asList()
+
+    # At a goal state all the food is eaten, so nothing is left to pay for.
+    if len(food) == 0:
+        return 0
+
+    # Relax the problem: instead of "eat every dot", only ask Pacman to reach the
+    # dot that is FARTHEST away, counting the real steps around the walls. Any real
+    # plan has to reach that dot as well, so it costs at least as much: the
+    # estimate is admissible.
+    #
+    # It is consistent too. One step changes the walking distance to a fixed dot by
+    # at most 1. The only other thing that can happen is that the farthest dot gets
+    # eaten, and that needs Pacman to stand next to it, so the estimate was 1.
+    #
+    # The walking distances from a dot to every cell are worked out once with a
+    # breadth-first search and kept in problem.heuristicInfo, so every later call
+    # only looks them up. (A walk is as long one way as the other, so the distance
+    # from the dot to Pacman is also the distance from Pacman to the dot.)
+    farthest = 0
+    for dot in food:
+        if dot not in problem.heuristicInfo:
+            problem.heuristicInfo[dot] = walkingDistances(dot, problem.walls)
+        farthest = max(farthest, problem.heuristicInfo[dot][position])
+    return farthest
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
@@ -542,7 +586,14 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # AnyFoodSearchProblem is solved by standing on ANY dot, and every step
+        # costs 1. Uniform cost search expands positions in order of their distance
+        # from Pacman and stops at the first goal it pops, so it returns a shortest
+        # path to the closest dot. (breadthFirstSearch would find a path of the same
+        # length, but it prints debug lines on every step, which would flood the
+        # console as this agent searches again and again.)
+        return search.uniformCostSearch(problem)
 
 class AnyFoodSearchProblem(PositionSearchProblem):
     """
@@ -578,7 +629,11 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         x,y = state
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        # A goal is any position that still holds a dot. self.food is the food grid
+        # taken from the game state when this problem was created, so dots that
+        # Pacman ate on earlier searches are no longer in it.
+        return self.food[x][y]
 
 def mazeDistance(point1: Tuple[int, int], point2: Tuple[int, int], gameState: pacman.GameState) -> int:
     """

@@ -422,7 +422,7 @@ svg.graph.pickable .nd, svg.graph.pickable .ed { cursor: pointer; }
   }
   function drawGrid(cv, gr, o) {
     const cs = o.cs || 12, W = gr.W, H = gr.H, dpr = window.devicePixelRatio || 1;
-    cv.style.width = W * cs + 'px'; cv.style.height = H * cs + 'px'; cv.width = Math.round(W * cs * dpr); cv.height = Math.round(H * cs * dpr);
+    cv.style.width = W * cs + 'px'; cv.style.height = 'auto'; cv.style.aspectRatio = W + ' / ' + H; cv.width = Math.round(W * cs * dpr); cv.height = Math.round(H * cs * dpr);
     const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const X = (x) => x * cs, Y = (y) => (H - 1 - y) * cs, cx = (x) => X(x) + cs / 2, cy = (y) => Y(y) + cs / 2;
     ctx.fillStyle = cssv('--b-board'); ctx.fillRect(0, 0, W * cs, H * cs);
@@ -432,6 +432,7 @@ svg.graph.pickable .nd, svg.graph.pickable .ed { cursor: pointer; }
       if (hi > lo) { ctx.fillStyle = cssv('--b-costtint'); for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const v = gr.cost[x][y]; if (v === null) continue; ctx.globalAlpha = 0.04 + 0.4 * (Math.log10(v) - lo) / (hi - lo); ctx.fillRect(X(x), Y(y), cs, cs); } ctx.globalAlpha = 1; }
     }
     if (o.order) { ctx.fillStyle = cssv('--b-visited'); const n = o.upto === undefined ? o.order.length : o.upto; for (let i = 0; i < n && i < o.order.length; i++) { const id = o.order[i], x = id % W, y = (id - x) / W; ctx.fillRect(X(x) + 1, Y(y) + 1, cs - 2, cs - 2); } }
+    if (o.tints) { Object.keys(o.tints).forEach((k) => { const [tx, ty] = k.split(',').map(Number), kind = o.tints[k]; ctx.fillStyle = kind === 'over' ? 'rgba(90,226,138,.26)' : kind === 'under' ? 'rgba(255,84,100,.30)' : 'rgba(154,167,214,.16)'; ctx.fillRect(X(tx) + 1, Y(ty) + 1, cs - 2, cs - 2); }); }
     if (o.heat) { ctx.fillStyle = 'rgb(255,90,110)'; Object.keys(o.heat).forEach((k) => { const [hx, hy] = k.split(',').map(Number); ctx.globalAlpha = Math.min(1, 0.14 + 0.78 * o.heat[k]); ctx.fillRect(X(hx) + 1, Y(hy) + 1, cs - 2, cs - 2); }); ctx.globalAlpha = 1; }
     const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !gr.wall[x][y];
     ctx.fillStyle = cssv('--b-wallfill'); ctx.strokeStyle = cssv('--b-wall'); ctx.lineWidth = Math.max(1, cs * 0.1); ctx.lineCap = 'round'; ctx.beginPath();
@@ -451,14 +452,15 @@ svg.graph.pickable .nd, svg.graph.pickable .ed { cursor: pointer; }
         else { ctx.fillStyle = kind === 'ok' ? 'rgba(90,226,138,.62)' : 'rgba(255,84,100,.62)'; ctx.fillRect(X(mx) + 1, Y(my) + 1, cs - 2, cs - 2); }
       });
     }
-    if (!o.hidePellet) { ctx.fillStyle = cssv('--b-pellet'); ctx.beginPath(); ctx.arc(cx(gr.goal[0]), cy(gr.goal[1]), Math.max(2, cs * 0.22), 0, Math.PI * 2); ctx.fill(); }
+    if (!o.hidePellet) { ctx.fillStyle = cssv('--b-pellet'); ctx.beginPath(); ctx.arc(cx(gr.goal[0]), cy(gr.goal[1]), Math.max(2, cs * (o.pelletR || 0.22)), 0, Math.PI * 2); ctx.fill(); }
     (o.dots || []).forEach((d) => {                  // markers such as corners: filled when still to visit, hollow when visited
       ctx.beginPath(); ctx.arc(cx(d.x), cy(d.y), Math.max(2.5, cs * (d.r || 0.3)), 0, Math.PI * 2);
       if (d.hollow) { ctx.strokeStyle = cssv('--b-start'); ctx.lineWidth = Math.max(1.5, cs * 0.08); ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]); } else { ctx.fillStyle = d.fill || cssv('--b-pellet'); ctx.fill(); }
     });
     const pac = o.pac === undefined ? gr.start : o.pac;
-    if (pac) { ctx.fillStyle = cssv('--b-pac'); ctx.beginPath(); ctx.moveTo(cx(pac[0]), cy(pac[1])); ctx.arc(cx(pac[0]), cy(pac[1]), cs * 0.42, 0.62, Math.PI * 2 - 0.62); ctx.closePath(); ctx.fill(); }
+    if (pac) { ctx.fillStyle = cssv('--b-pac'); ctx.beginPath(); ctx.moveTo(cx(pac[0]), cy(pac[1])); ctx.arc(cx(pac[0]), cy(pac[1]), cs * (o.pacR || 0.42), 0.62, Math.PI * 2 - 0.62); ctx.closePath(); ctx.fill(); }
     (o.labels || []).forEach((l) => {
+      if (l.at) { ctx.fillStyle = l.color || '#e8edfb'; ctx.font = '700 ' + (l.size || Math.max(9, Math.round(cs * 0.26))) + 'px monospace'; ctx.textAlign = l.at[1] === 'l' ? 'left' : 'right'; ctx.textBaseline = l.at[0] === 't' ? 'top' : 'bottom'; ctx.fillText(l.text, l.at[1] === 'l' ? X(l.x) + 3 : X(l.x) + cs - 3, l.at[0] === 't' ? Y(l.y) + 2 : Y(l.y) + cs - 2); return; }
       if (l.corner) { const w = Math.max(10, cs * 0.42); ctx.fillStyle = 'rgba(16,23,43,.92)'; ctx.fillRect(X(l.x), Y(l.y), w, w); ctx.fillStyle = '#6fe39a'; ctx.font = '700 ' + Math.max(8, Math.round(cs * 0.34)) + 'px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(l.text, X(l.x) + w / 2, Y(l.y) + w / 2 + 0.5); return; }
       ctx.fillStyle = '#10172b'; ctx.font = '700 ' + Math.max(9, Math.round(cs * 0.5)) + 'px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(l.text, cx(l.x), cy(l.y) + 0.5); });
   }
@@ -604,11 +606,12 @@ svg.graph.pickable .nd, svg.graph.pickable .ed { cursor: pointer; }
         (res && res.marks ? '<p class="cap">Green square: right. Red: wrong. Green dashed outline: a cell you missed.' + (sp.pick === 'seq' ? ' The small green number is the cell\'s place in the correct order.' : '') + '</p>' : '') +
         (locked ? '' : '<button type="button" class="btn" id="clearPicks" style="align-self:flex-start;height:30px;font-size:.8rem">Clear picks</button>');
       const cv = $('cellcv'), cs = sp.cs || 22;
-      H.drawGrid(cv, sp.grid, Object.assign({ cs, marks, labels }, sp.drawOpts ? sp.drawOpts() : {}));
+      const extra = sp.drawOpts ? sp.drawOpts() : {};
+      H.drawGrid(cv, sp.grid, Object.assign({ cs, marks }, extra, { labels: labels.concat(extra.labels || []) }));
       if (!locked) {
         cv.addEventListener('click', (ev) => {
           const r = cv.getBoundingClientRect(), x = Math.floor((ev.clientX - r.left) / (r.width / sp.grid.W)), y = sp.grid.H - 1 - Math.floor((ev.clientY - r.top) / (r.height / sp.grid.H));
-          if (x < 0 || y < 0 || x >= sp.grid.W || y >= sp.grid.H || sp.grid.wall[x][y]) return;
+          if (x < 0 || y < 0 || x >= sp.grid.W || y >= sp.grid.H || (sp.grid.wall[x][y] && !sp.allowWalls)) return;
           const id = x + ',' + y, k = c.resp.indexOf(id);
           if (sp.pick === 'seq') { if (k >= 0) c.resp.splice(k, 1); else if (!sp.max || c.resp.length < sp.max) c.resp.push(id); }
           else if (sp.max === 1) c.resp = k >= 0 ? [] : [id];
